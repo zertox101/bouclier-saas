@@ -1,0 +1,6 @@
+# Authorized targets only (lab or company with written approval).
+# Put private targets here. Public targets belong in targets_public.txt.
+# You can list docker service names or private IPs/CIDR blocks.
+backend
+frontend
+dashboard

@@ -1,0 +1,159 @@
+services:
+  # Database Layer
+  postgres:
+    image: postgres:15-alpine
+    container_name: bouclier-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=shield_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bouclier-net
+
+  # Cache & Stream Layer
+  redis:
+    image: redis:7-alpine
+    container_name: bouclier-redis
+    ports:
+      - "6380:6379"
+    networks:
+      - bouclier-net
+
+  # AI Intelligence (Ollama)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bouclier-ai
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - bouclier-net
+
+  # Backend Core
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bouclier-api
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./backend:/code
+      - ./geoip:/geoip
+    environment:
+      - ENVIRONMENT=production
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=shield_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LLM_PROVIDER=ollama
+      - LLM_BASE_URL=http://ollama:11434
+      - LLM_MODEL=llama3.2:3b
+      - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
+      - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+    networks:
+      - bouclier-net
+      - academy-net
+
+  # Tools Execution API
+  tools-api:
+    build:
+      context: .
+      dockerfile: tools-api/Dockerfile
+    container_name: bouclier-tools
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./tools:/opt/tools
+      - ./tools-api:/opt/tools-api
+    environment:
+      - TOOLS_ENABLE_OFFENSIVE=1
+      - TOOLS_ENABLE_WEB_SCANNER=1
+      - TOOLS_REQUIRE_PRIVATE=0
+      - TOOLS_ALLOW_PUBLIC_TARGETS=1
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      - bouclier-net
+      - academy-net
+
+  # Web Security Scanner (OWASP ZAP)
+  zap:
+    image: zaproxy/zap-stable
+    container_name: bouclier-zap
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+    ports:
+      - "8081:8080"
+    networks:
+      - bouclier-net
+
+  # Frontend Dashboard (Port 3001)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bouclier-gui
+    ports:
+      - "3002:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8005
+      - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost:8100
+    depends_on:
+      - backend
+    networks:
+      - bouclier-net
+
+  # Threat Simulation (Purple Team)
+  kali-attacker:
+    build:
+      context: ./kali
+      dockerfile: Dockerfile
+    container_name: bouclier-kali
+    environment:
+      - API_URL=http://backend:8005/api/events/ingest
+      - AUTO_SCAN=1
+      - INTERVAL_SEC=60
+    depends_on:
+      - backend
+    networks:
+      - bouclier-net
+
+  # Secondary database for SQL connector testing (Telemetry Ingestion Target)
+  external-db:
+    image: postgres:15-alpine
+    container_name: bouclier-external-db
+    environment:
+      - POSTGRES_USER=telemetry_user
+      - POSTGRES_PASSWORD=telemetry_pass
+      - POSTGRES_DB=external_telemetry
+    ports:
+      - "5434:5432"
+    networks:
+      - bouclier-net
+
+networks:
+  bouclier-net:
+    driver: bridge
+
+  academy-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  ollama_data:

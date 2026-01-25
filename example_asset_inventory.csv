@@ -1,0 +1,19 @@
+Timestamp,Asset Type,Name,Category,Status,Risk Level,Description,Tags,Details
+2025-12-25T20:05:11.000Z,Security Tool,Local Vulnerability Scanner,Local,ready,medium,"Scans local machine for open ports, services, and basic OS fingerprinting.",scanner;local;ports,
+2025-12-25T20:05:11.000Z,Security Tool,Network Scanner,Network,ready,low,"Performs ARP discovery to find devices on the local subnet.",network;discovery;arp,
+2025-12-25T20:05:11.000Z,Security Tool,Network Recon,Network,ready,medium,"Port scan and light service enumeration on a target IP.",network;recon;ports,
+2025-12-25T20:05:11.000Z,Security Tool,OSINT Recon,OSINT,ready,low,"Gathers domain info, WHOIS, and web metadata.",osint;recon;passive,
+2025-12-25T20:05:11.000Z,Security Tool,Packet Sniffer,Network,ready,medium,"Captures and summarizes local network packets.",network;sniffer;pcap,
+2025-12-25T20:05:11.000Z,Security Tool,IP Scanner,Network,ready,low,"Looks up IP info and optionally scans ports.",network;ip;lookup,
+2025-12-25T20:05:11.000Z,Security Tool,Mobile Security,Mobile,ready,medium,"Static analysis of APK files for security issues.",mobile;apk;analysis,
+2025-12-25T20:05:11.000Z,Security Tool,Malware Analyzer,Advanced,ready,high,"Static file analysis: hashes, entropy, strings.",malware;analysis;static,
+2025-12-25T20:05:11.000Z,Security Tool,Threat Hunting,SOC,ready,high,"Advanced threat hunting and honeypot system.",soc;threat;hunting,
+2025-12-25T20:05:11.000Z,Network Traffic,Inbound Traffic,Network,Active,low,"Total: 7.17 MB, Rate: 343 KB/s",traffic;inbound,14320 packets
+2025-12-25T20:05:11.000Z,Network Traffic,Outbound Traffic,Network,Active,low,"Total: 293.57 KB, Rate: 214 KB/s",traffic;outbound,17403 packets
+2025-12-25T20:05:11.000Z,AI Analysis,Security Assessment,Analysis,Completed,medium,"Analyzed 12 log entries. Risk score: 45/100",ai;llm;analysis,"Threats: 2, Recommendations: 3"
+2025-12-25T20:05:11.000Z,Threat,Threat 1,Security,Detected,high,"Open ports discovered - potential attack surface",threat;detected,
+2025-12-25T20:05:11.000Z,Threat,Threat 2,Security,Detected,high,"Weak or outdated configurations detected",threat;detected,
+2025-12-25T20:05:11.000Z,Recommendation,Recommendation 1,Security,Pending,medium,"Review and close unnecessary ports",recommendation;action,
+2025-12-25T20:05:11.000Z,Recommendation,Recommendation 2,Security,Pending,medium,"Update software and strengthen configurations",recommendation;action,
+2025-12-25T20:05:11.000Z,Recommendation,Recommendation 3,Security,Pending,medium,"Continue regular security assessments",recommendation;action,
+2025-12-25T20:05:11.000Z,Scan Results,Local Vulnerability Scanner,Scan,Completed,medium,Total logs: 12,scan;results,"Errors: 0, Warnings: 2, Success: 10"

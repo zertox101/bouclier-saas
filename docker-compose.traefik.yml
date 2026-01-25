@@ -1,0 +1,114 @@
+version: '3.8'
+
+# Traefik Override for Bouclier SaaS
+# This file adds Traefik routing without modifying the original docker-compose.yml
+
+services:
+  backend:
+    networks:
+      - proxy
+      - bouclier-net
+    ports: [] # Remove host port exposure
+    environment:
+      - CORS_ORIGINS=https://bouclier.local
+      - COOKIE_DOMAIN=bouclier.local
+      - COOKIE_SECURE=true
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8005/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+
+      # API Router (with path prefix)
+      - "traefik.http.routers.bouclier-api.rule=Host(`bouclier.local`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.bouclier-api.entrypoints=websecure"
+      - "traefik.http.routers.bouclier-api.tls=true"
+      - "traefik.http.routers.bouclier-api.service=bouclier-api"
+      - "traefik.http.routers.bouclier-api.middlewares=security-headers,compression,rate-limit-api"
+
+      # API Service
+      - "traefik.http.services.bouclier-api.loadbalancer.server.port=8005"
+      - "traefik.http.services.bouclier-api.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.bouclier-api.loadbalancer.healthcheck.interval=10s"
+      - "traefik.http.services.bouclier-api.loadbalancer.healthcheck.timeout=5s"
+
+  frontend:
+    networks:
+      - proxy
+      - bouclier-net
+    ports: [] # Remove host port exposure
+    environment:
+      - NEXT_PUBLIC_API_URL=https://bouclier.local
+      - NEXT_PUBLIC_TOOLS_API_BASE=https://bouclier.local/tools
+    labels:
+      - "traefik.enable=true"
+
+      # Frontend Router (catch-all for SPA/Next.js)
+      - "traefik.http.routers.bouclier-frontend.rule=Host(`bouclier.local`)"
+      - "traefik.http.routers.bouclier-frontend.entrypoints=websecure"
+      - "traefik.http.routers.bouclier-frontend.tls=true"
+      - "traefik.http.routers.bouclier-frontend.priority=1"
+      - "traefik.http.routers.bouclier-frontend.service=bouclier-frontend"
+      - "traefik.http.routers.bouclier-frontend.middlewares=security-headers,compression"
+
+      # Frontend Service
+      - "traefik.http.services.bouclier-frontend.loadbalancer.server.port=3000"
+
+  tools-api:
+    networks:
+      - proxy
+      - bouclier-net
+    ports: [] # Remove host port exposure
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+
+      # Tools API Router
+      - "traefik.http.routers.bouclier-tools.rule=Host(`bouclier.local`) && PathPrefix(`/tools`)"
+      - "traefik.http.routers.bouclier-tools.entrypoints=websecure"
+      - "traefik.http.routers.bouclier-tools.tls=true"
+      - "traefik.http.routers.bouclier-tools.service=bouclier-tools"
+      - "traefik.http.routers.bouclier-tools.middlewares=security-headers,compression,rate-limit-api,bouclier-strip-tools"
+
+      # Strip /tools prefix before forwarding
+      - "traefik.http.middlewares.bouclier-strip-tools.stripprefix.prefixes=/tools"
+
+      # Tools Service
+      - "traefik.http.services.bouclier-tools.loadbalancer.server.port=8100"
+      - "traefik.http.services.bouclier-tools.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.bouclier-tools.loadbalancer.healthcheck.interval=10s"
+
+  # Remove redirector service (not needed with Traefik)
+  redirector:
+    profiles: [ "disabled" ]
+
+  # Database and other services don't need Traefik exposure
+  postgres:
+    networks:
+      - bouclier-net
+    ports:
+      - "5433:5432" # Keep for local dev access
+
+  redis:
+    networks:
+      - bouclier-net
+    ports:
+      - "6380:6379" # Keep for local dev access
+
+  ollama:
+    networks:
+      - bouclier-net
+    ports:
+      - "11434:11434" # Keep for local dev access
+
+networks:
+  proxy:
+    external: true
+  bouclier-net:
+    driver: bridge

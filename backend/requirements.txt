@@ -1,0 +1,20 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+redis
+asyncpg
+pydantic
+python-multipart
+requests
+psutil
+scikit-learn
+pandas
+python-dotenv
+websockets
+python-jose[cryptography]
+passlib[bcrypt]
+torch==2.1.0+cpu
+joblib
+geoip2

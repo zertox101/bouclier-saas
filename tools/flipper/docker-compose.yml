@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  flipper-builder:
+    build: .
+    container_name: flipper-builder
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./firmware:/flipper
+      - ./output:/output
+    working_dir: /flipper
+    command: /bin/bash
+    restart: unless-stopped

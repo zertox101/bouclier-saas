@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: shield-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=shield_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shield-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: shield-redis
+    ports:
+      - "6380:6379"
+    networks:
+      - shield-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: shield-ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - shield-network
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: shield-ollama-init
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - LLM_MODEL=llama3.2:3b
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: [ "sleep 3 && ollama pull $${LLM_MODEL:-llama3.2:3b}" ]
+    volumes:
+      - ollama_data:/root/.ollama
+    depends_on:
+      - ollama
+    networks:
+      - shield-network
+    restart: "no"
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: shield-backend
+    ports:
+      - "8005:8005"
+    volumes:
+      - ../backend:/code
+      - ../geoip:/geoip
+    environment:
+      - ENVIRONMENT=development
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=shield_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_STREAM_NAME=event_stream
+      - REDIS_STREAM_MAXLEN=10000
+      - REDIS_CONSUMER_GROUP=event_workers
+      - REDIS_FLOW_STREAM_NAME=event_stream
+      - REDIS_FLOW_STREAM_MAXLEN=50000
+      - JWT_SECRET=change-me
+      - FEATURE_WINDOW_SECONDS=3600
+      - SEQUENCE_WINDOW_SECONDS=900
+      - SEQUENCE_MAX_LEN=20
+      - RAG_SOURCE_DIR=/code/app/rag_sources
+      - GRU_MODEL_PATH=/code/app/ml_artifacts/gru_model.pt
+      - GRU_SCALER_PATH=/code/app/ml_artifacts/gru_scaler.joblib
+      - GRU_META_PATH=/code/app/ml_artifacts/gru_meta.json
+      - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
+      - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
+      - GEOIP_CACHE_TTL=604800
+      - LLM_PROVIDER=ollama
+      - LLM_BASE_URL=http://ollama:11434
+      - LLM_MODEL=llama3.2:3b
+      - LLM_TIMEOUT=30
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+    networks:
+      - shield-network
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: shield-worker
+    command: [ "python", "-m", "app.worker" ]
+    volumes:
+      - ../backend:/code
+      - ../geoip:/geoip
+    environment:
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=shield_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_STREAM_NAME=event_stream
+      - REDIS_STREAM_MAXLEN=10000
+      - REDIS_CONSUMER_GROUP=event_workers
+      - REDIS_CONSUMER_NAME=worker-1
+      - REDIS_FLOW_STREAM_NAME=flows
+      - REDIS_FLOW_STREAM_MAXLEN=50000
+      - FEATURE_WINDOW_SECONDS=3600
+      - SEQUENCE_WINDOW_SECONDS=900
+      - SEQUENCE_MAX_LEN=20
+      - GRU_MODEL_PATH=/code/app/ml_artifacts/gru_model.pt
+      - GRU_SCALER_PATH=/code/app/ml_artifacts/gru_scaler.joblib
+      - GRU_META_PATH=/code/app/ml_artifacts/gru_meta.json
+      - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
+      - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
+      - GEOIP_CACHE_TTL=604800
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    networks:
+      - shield-network
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: shield-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8005
+      - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost:8100
+    depends_on:
+      - backend
+    networks:
+      - shield-network
+
+  tools-api:
+    build:
+      context: ..
+      dockerfile: tools-api/Dockerfile
+    container_name: shield-tools
+    ports:
+      - "8100:8100"
+    volumes:
+      - ../tools:/opt/tools
+      - ../tools-api:/opt/tools-api
+      - ../tools/outputs:/opt/tools/outputs
+      - ../tools/inputs:/opt/tools/inputs
+    environment:
+      - TOOLS_SECURITY_DIR=/opt/tools/attack-simulations/security
+      - TOOLS_SIM_DIR=/opt/tools/attack-simulations/simulation
+      - TOOLS_OUTPUT_DIR=/opt/tools/outputs
+      - TOOLS_CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+      - TOOLS_REQUIRE_PRIVATE=1
+      - TOOLS_ALLOW_PUBLIC_TARGETS=1
+      - TOOLS_ENABLE_WEB_SCANNER=1
+      - TOOLS_ENABLE_OFFENSIVE=1
+      - TOOLS_MAX_SNIFF_DURATION=300
+      - TOOLS_MAX_SNIFF_PACKETS=5000
+      - TOOLS_MAX_PING_COUNT=10
+      - TOOLS_MAX_TRACEROUTE_HOPS=20
+      - TOOLS_MAX_GOBUSTER_THREADS=20
+      - TOOLS_MAX_FFUF_THREADS=20
+      - TOOLS_MAX_HYDRA_THREADS=4
+      - TOOLS_MAX_MASSCAN_RATE=5000
+      - TOOLS_CMD_TIMEOUT=180
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      - shield-network
+
+  kali-attacker:
+    build:
+      context: ../kali
+      dockerfile: Dockerfile
+    container_name: shield-kali-attacker
+    environment:
+      - API_URL=http://backend:8005/api/events/ingest
+      - TARGETS_FILE=/opt/scan/targets.txt
+      - SRC_IP=203.0.113.10
+      - EVENT_USER=lab-scanner
+      - HOST_NAME=kali-attacker
+      - EVENT_TYPE=port_scan
+      - SCAN_SEVERITY=low
+      - SCAN_PORTS=22,80,443,445,3389,8080,8443,3306,5432,8005,3000,8501,8100
+      - ALLOW_PUBLIC_TARGETS=1
+      - PUBLIC_TARGETS_FILE=/opt/scan/targets_public.txt
+      - REQUIRE_PUBLIC_ALLOWLIST=1
+      - AUTO_SCAN=1
+      - INTERVAL_SEC=60
+    volumes:
+      - ../kali/targets.txt:/opt/scan/targets.txt:ro
+      - ../kali/targets_public.txt:/opt/scan/targets_public.txt:ro
+    depends_on:
+      - backend
+    networks:
+      - shield-network
+
+networks:
+  shield-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  ollama_data:
