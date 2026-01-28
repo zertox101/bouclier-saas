@@ -84,12 +84,42 @@ export default function TrafficPage() {
         };
     }, []);
 
+    // Fetch Live Traffic Connections (REAL DATA)
+    const fetchLiveTraffic = useCallback(async () => {
+        try {
+            const res = await fetch(`${apiBase}/api/traffic/live`);
+            if (res.ok) {
+                const data = await res.json();
+                const mappedPackets: Packet[] = (data.connections || []).map((conn: any) => ({
+                    id: Math.random().toString(36).substr(2, 9),
+                    timestamp: conn.timestamp || new Date().toISOString(),
+                    src: conn.src_ip,
+                    dst: conn.dst_ip,
+                    protocol: conn.service || "TCP",
+                    size: 64,
+                    flag: conn.state || "ESTABLISHED",
+                    latency: "1ms",
+                    status: (conn.severity === "Critique" || conn.severity === "Élevé") ? 'DROP' : 'ALLOW',
+                    details: conn.alerts?.[0] || 'Live Flow',
+                    severity: conn.severity === "Critique" ? 'high' : 'low'
+                }));
+
+                if (mappedPackets.length > 0) {
+                    setPackets(prev => [...mappedPackets, ...prev].slice(0, 100));
+                }
+            }
+        } catch (e) {
+            console.error("Live Traffic Fetch Error:", e);
+        }
+    }, [apiBase]);
+
     // SSE Connection & Mock Fallback
     useEffect(() => {
         if (!isCapturing) return;
 
         let es: EventSource | null = null;
         let mockInterval: NodeJS.Timeout | null = null;
+        let trafficInterval: NodeJS.Timeout | null = null;
 
         // Function to start mock mode
         const startMockMode = () => {
@@ -118,20 +148,24 @@ export default function TrafficPage() {
         };
 
         if (platformMode === 'emulation') {
+            setIsConnected(true);
+
+            // Initial fetch
+            fetchLiveTraffic();
+
+            // Regular polling for real connections
+            trafficInterval = setInterval(fetchLiveTraffic, 5000);
+
             try {
                 const startId = "$";
                 es = new EventSource(`${apiBase}/map/stream?last_id=${startId}`);
 
                 es.onopen = () => {
                     setIsConnected(true);
-                    if (mockInterval) clearInterval(mockInterval);
                 };
 
                 es.onerror = () => {
-                    setIsConnected(false);
                     es?.close();
-                    // Auto-fallback to mock if real connection fails (requested: "khdama f ga3 les mode")
-                    startMockMode();
                 };
 
                 es.addEventListener("flow", (e: MessageEvent) => {
@@ -158,7 +192,6 @@ export default function TrafficPage() {
 
             } catch (e) {
                 console.error("Traffic Stream Error:", e);
-                startMockMode();
             }
         } else {
             // Simulator Mode (Offline)
@@ -168,8 +201,10 @@ export default function TrafficPage() {
         return () => {
             if (es) es.close();
             if (mockInterval) clearInterval(mockInterval);
+            if (trafficInterval) clearInterval(trafficInterval);
         };
-    }, [apiBase, isCapturing, platformMode, generateMockPacket]);
+    }, [apiBase, isCapturing, platformMode, generateMockPacket, fetchLiveTraffic]);
+
 
     // Polling for Real Stats (Only in emulation mode)
     useEffect(() => {

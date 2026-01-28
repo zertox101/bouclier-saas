@@ -800,7 +800,14 @@ async def chat_sentinel(chat: ChatMessage, request: Request):
         "stats": monitor.traffic_by_country
     }
     
-    response["content"] = llm_engine.chat_response(msg, context)
+    print(f"[Sentinel] Received Message: {msg}")
+    try:
+        content = llm_engine.chat_response(msg, context)
+        print(f"[Sentinel] Engine Response: {content[:50]}...")
+        response["content"] = content
+    except Exception as e:
+        print(f"[Sentinel] Error in chat_response: {e}")
+        response["content"] = "ERROR: My neural link is experiencing interference. Please retry later."
     
     if "status" in msg.lower() or "health" in msg.lower():
         response["actions"] = [{"type": "navigate", "label": "View Dashboard", "path": "/overview"}]

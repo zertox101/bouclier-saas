@@ -35,6 +35,8 @@ from app.routes.appsec import router as appsec_router
 app.include_router(appsec_router)
 from app.routes.scans import router as scans_router
 app.include_router(scans_router)
+from app.routes.threat_map import router as threat_map_router
+app.include_router(threat_map_router)
 
 def ensure_default_admin(db) -> None:
     if not DEFAULT_ADMIN_CREATE:
@@ -48,10 +50,15 @@ def ensure_default_admin(db) -> None:
         ).first()
         if existing:
             return
+        password = str(DEFAULT_ADMIN_PASSWORD)
+        print(f"[DEBUG] Admin setup: user={DEFAULT_ADMIN_USERNAME}, pwd_len={len(password)}, type={type(password)}")
+        if len(password) > 71:
+            password = password[:71]
+            
         user = User(
             username=DEFAULT_ADMIN_USERNAME,
             email=DEFAULT_ADMIN_EMAIL,
-            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+            hashed_password=hash_password(password),
             role="admin",
             is_active=True,
         )
@@ -89,8 +96,45 @@ def init_database() -> None:
 
 
 @app.on_event("startup")
-def on_startup() -> None:
+async def on_startup() -> None:
     init_database()
+    
+    # Start Background Monitoring
+    import asyncio
+    async def background_monitoring():
+        from app.services.scanner import scan_network_connections, analyze_packet
+        from app.models.monitor import monitor
+        from app.core.database import SessionLocal
+        
+        print("[System] Background Security Monitor Started.")
+        while True:
+            try:
+                connections = scan_network_connections()
+                db = SessionLocal()
+                try:
+                    for conn in connections:
+                        analysis = analyze_packet(conn)
+                        if analysis["is_suspicious"]:
+                            event_data = {
+                                **conn,
+                                "type": analysis["alerts"][0],
+                                "severity": analysis["severity"],
+                                "message": f"Activity Detected: {analysis['alerts'][0]} ({conn.get('src_ip')} -> {conn.get('dst_port')})"
+                            }
+                            monitor.add_event(event_data, db)
+                    
+                    # Update global packet buffer
+                    monitor.packets.extend(connections)
+                    if len(monitor.packets) > 5000:
+                        monitor.packets = monitor.packets[-5000:]
+                        
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"Monitor Loop Error: {e}")
+            await asyncio.sleep(5) # Scan every 5 seconds
+
+    asyncio.create_task(background_monitoring())
 
 if __name__ == "__main__":
     # Load History on Startup

@@ -113,6 +113,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8005
       - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost:8100
+      - NEXTAUTH_SECRET=bouclier_super_secret_key_2026_change_me
+      - NEXTAUTH_URL=http://localhost:3002
     depends_on:
       - backend
     networks:

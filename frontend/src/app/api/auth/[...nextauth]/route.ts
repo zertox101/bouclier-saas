@@ -21,18 +21,30 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Invalid credentials');
                 }
 
+                console.log(`[Auth] Attempting login for: ${credentials.email}`);
+                console.log(`[Auth] Querying user in Prisma: ${credentials.email}`);
                 const user = await prisma.user.findUnique({
                     where: { email: credentials.email },
                     include: { organization: true }
                 });
+                console.log(`[Auth] Prisma query finished for: ${credentials.email}, found: ${!!user}`);
 
-                if (!user || !user.password) {
+                if (!user) {
+                    console.log('[Auth] User not found in DB');
                     throw new Error('User not found');
                 }
 
+                if (!user.password) {
+                    console.log('[Auth] User has no password set');
+                    throw new Error('User has no password');
+                }
+
+                console.log(`[Auth] User data retrieved, starting comparison for: ${user.email}`);
                 const isValid = await compare(credentials.password, user.password);
+                console.log(`[Auth] Comparison result for ${credentials.email}: ${isValid}`);
 
                 if (!isValid) {
+                    console.log(`[Auth] Invalid password for: ${credentials.email}`);
                     throw new Error('Invalid password');
                 }
 

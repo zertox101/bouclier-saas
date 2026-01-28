@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
     Terminal as TerminalIcon,
     Play,
@@ -24,17 +25,16 @@ import {
     Brain,
     Zap,
     Database,
-    Network,
     Cpu,
     Dna,
     Settings,
-    LayoutGrid,
-    Binary
+    LayoutGrid
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { LogEntry, Tool } from '@/types/tools';
+import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const riskColors = {
     low: 'text-success border-success/20 bg-success/10',
@@ -79,7 +79,6 @@ interface LLMAnalysis {
     riskScore: number;
 }
 
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 export default function ToolsPage() {
     const apiBase = process.env.NEXT_PUBLIC_TOOLS_API_BASE || 'http://localhost:8100';
@@ -139,7 +138,7 @@ export default function ToolsPage() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
-    const loadTools = async () => {
+    const loadTools = async (initialId?: string | null) => {
         try {
             setApiError(null);
             const res = await fetch(`${apiBase}/tools`, { cache: 'no-store' });
@@ -147,7 +146,13 @@ export default function ToolsPage() {
             const data = await res.json();
             const toolList = data.tools || [];
             setTools(toolList);
-            if (!selectedToolId && toolList.length) setSelectedToolId(toolList[0].id);
+
+            // Priority: Query Param > First Tool
+            if (initialId && toolList.some((t: Tool) => t.id === initialId)) {
+                setSelectedToolId(initialId);
+            } else if (!selectedToolId && toolList.length) {
+                setSelectedToolId(toolList[0].id);
+            }
         } catch (err: any) {
             setApiError(err?.message || 'Access Denied: Tools API unreachable');
             setTools([]);
@@ -168,7 +173,10 @@ export default function ToolsPage() {
     };
 
     useEffect(() => {
-        loadTools();
+        const queryParams = new URLSearchParams(window.location.search);
+        const queryToolId = queryParams.get('tool_id');
+
+        loadTools(queryToolId);
         fetchTrafficStats();
         const trafficInterval = setInterval(fetchTrafficStats, 5000);
         return () => {
@@ -188,15 +196,25 @@ export default function ToolsPage() {
         setLogs([]);
         setLLMAnalysis(null);
 
-        try {
-            const inputPayload: Record<string, string | number> = {};
-            (tool.inputs || []).forEach(input => {
-                const raw = toolInputs[input.key] || '';
-                if (raw !== '') {
-                    inputPayload[input.key] = input.type === 'number' ? Number(raw) : raw;
-                }
-            });
+        const missingFields: string[] = [];
+        const inputPayload: Record<string, string | number> = {};
 
+        (tool.inputs || []).forEach(input => {
+            const raw = toolInputs[input.key] || '';
+            if (raw === '' && input.required) {
+                missingFields.push(input.label);
+            }
+            if (raw !== '') {
+                inputPayload[input.key] = input.type === 'number' ? Number(raw) : raw;
+            }
+        });
+
+        if (missingFields.length > 0) {
+            setApiError(`Required fields missing: ${missingFields.join(', ')}`);
+            return;
+        }
+
+        try {
             const res = await fetch(`${apiBase}/tools/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -442,7 +460,7 @@ export default function ToolsPage() {
                                                     <><Play className="h-4 w-4 fill-current" /> Deploy_Payload</>
                                                 )}
                                             </button>
-                                            <button onClick={loadTools} className="h-10 rounded-xl border border-white/5 bg-white/5 text-[9px] font-black uppercase tracking-widest text-text-3 hover:text-white transition-all flex items-center justify-center gap-2">
+                                            <button onClick={() => loadTools()} className="h-10 rounded-xl border border-white/5 bg-white/5 text-[9px] font-black uppercase tracking-widest text-text-3 hover:text-white transition-all flex items-center justify-center gap-2">
                                                 <RefreshCw className="h-3 w-3" /> Sync_Inventory
                                             </button>
                                         </div>
@@ -463,13 +481,16 @@ export default function ToolsPage() {
                                                     </label>
                                                     <div className="relative group">
                                                         <div className="absolute inset-y-0 left-5 flex items-center text-text-3 group-focus-within:text-p-400 transition-colors">
-                                                            {input.key.includes('url') || input.key.includes('target') ? <Globe className="h-4 w-4" /> : <Binary className="h-4 w-4" />}
+                                                            {input.key.includes('url') || input.key.includes('target') ? <Globe className="h-4 w-4" /> : <TerminalIcon className="h-4 w-4" />}
                                                         </div>
                                                         <input
                                                             type={input.type === 'number' ? 'number' : 'text'}
                                                             placeholder={input.placeholder || `EXEC_INPUT_${input.key.toUpperCase()}`}
                                                             value={toolInputs[input.key] || ''}
-                                                            onChange={(e) => setToolInputs({ ...toolInputs, [input.key]: e.target.value })}
+                                                            onChange={(e) => {
+                                                                setToolInputs({ ...toolInputs, [input.key]: e.target.value });
+                                                                if (apiError) setApiError(null);
+                                                            }}
                                                             className="w-full bg-white/5 border border-white/5 rounded-2xl pl-14 pr-6 py-4 text-xs font-black text-white placeholder:text-text-3/20 focus:outline-none focus:border-p-500/50 focus:bg-white/10 transition-all uppercase tracking-widest"
                                                         />
                                                     </div>

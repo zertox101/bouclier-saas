@@ -156,6 +156,22 @@
   ::-webkit-scrollbar-thumb {
     @apply bg-border-2 rounded-full hover:bg-p-600;
   }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    display: block;
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-p-500/20 rounded-full hover:bg-p-500/40;
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* Animations */

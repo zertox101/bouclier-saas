@@ -37,15 +37,22 @@ export function useSocketSse<T>({
             if (pollingTimer.current) clearInterval(pollingTimer.current);
         };
 
-        es.onmessage = (event) => {
+        const handleData = (eventData: string) => {
             try {
-                const parsed = JSON.parse(event.data);
+                const parsed = JSON.parse(eventData);
                 setData(parsed);
                 if (onMessage) onMessage(parsed);
             } catch (e) {
                 console.error("SSE Parse Error", e);
             }
         };
+
+        es.onmessage = (event) => handleData(event.data);
+
+        // Listen to common named events in our system
+        es.addEventListener('events', (e: any) => handleData(e.data));
+        es.addEventListener('flow', (e: any) => handleData(e.data));
+        es.addEventListener('health', (e: any) => handleData(e.data));
 
         es.onerror = () => {
             es.close();
@@ -61,6 +68,7 @@ export function useSocketSse<T>({
             }
         };
     }, [url, reconnectInterval, maxRetries, pollingFallback, onMessage]);
+
 
     const startPolling = useCallback(async () => {
         setStatus('demo');

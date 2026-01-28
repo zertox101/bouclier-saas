@@ -229,7 +229,7 @@ def _extract_target_host(target: str) -> str:
 
 def _validate_target(target: Optional[str], allow_hostname: bool = False) -> str:
     if not target:
-        raise HTTPException(status_code=400, detail="target is required")
+        raise HTTPException(status_code=400, detail="A target IP, Host or CIDR is required.")
 
     candidate = _extract_target_host(str(target))
     if not candidate:
@@ -797,15 +797,49 @@ def _build_command(tool_id: str, payload: Dict[str, Any]) -> List[str]:
         _require_bin("amass", tool_id)
         domain = payload.get("target") or payload.get("domain")
         if not domain:
-            raise HTTPException(status_code=400, detail="domain is required")
-        # Extract domain from URL if needed
+            raise HTTPException(status_code=400, detail="Target domain is required.")
         if "://" in str(domain):
             parsed = urlparse(str(domain))
             domain = parsed.hostname or domain
         cmd = ["timeout", f"{CMD_TIMEOUT}s", "amass", "enum", "-d", str(domain), "-passive"]
-        if payload.get("active"):
+        if payload.get("active") or payload.get("mode") == "active":
             cmd.remove("-passive")
         return cmd
+
+    # OSINT - TheHarvester
+    if tool_id == "theharvester_scan":
+        _require_bin("theHarvester", tool_id)
+        domain = payload.get("target") or payload.get("domain")
+        if not domain:
+            raise HTTPException(status_code=400, detail="Target domain is required.")
+        if "://" in str(domain):
+            parsed = urlparse(str(domain))
+            domain = parsed.hostname or domain
+        source = str(payload.get("source") or "google,bing,yahoo")
+        limit = int(payload.get("limit") or 500)
+        return [
+            "timeout",
+            f"{CMD_TIMEOUT}s",
+            "theHarvester",
+            "-d",
+            str(domain),
+            "-b",
+            source,
+            "-l",
+            str(limit),
+        ]
+
+    # Network - CrackMapExec
+    if tool_id == "cme_smb" or tool_id == "crackmapexec_smb":
+        if not ENABLE_OFFENSIVE_TOOLS:
+             raise HTTPException(status_code=403, detail="Offensive tools are disabled.")
+        _require_bin("crackmapexec", tool_id)
+        target = _validate_target(payload.get("target"))
+        user = payload.get("username") or payload.get("user")
+        password = payload.get("password") or payload.get("pass")
+        if not user or not password:
+             raise HTTPException(status_code=400, detail="Username and password are required.")
+        return ["crackmapexec", "smb", str(target), "-u", str(user), "-p", str(password)]
 
     # OSINT - Subfinder
     if tool_id == "subfinder_enum":
@@ -1725,3 +1759,32 @@ def stop_job(job_id: str) -> Dict[str, Any]:
         job.completed_at = time.time()
         job.append_log("warning", "Job terminated by user")
     return {"job_id": job_id, "status": job.status}
+
+
+# Import Arsenal Tools
+try:
+    from arsenal_tools import ARSENAL_TOOLS
+except ImportError:
+    ARSENAL_TOOLS = []
+
+
+@app.get("/tools")
+def list_tools() -> Dict[str, Any]:
+    """
+    Returns all available offensive security tools
+    Merges tools-api tools with Arsenal browser tools
+    """
+    # Get existing tools from _get_tools_inventory()
+    existing_tools = _get_tools_inventory()
+    
+    # Add Arsenal tools
+    all_tools = existing_tools.copy()
+    for arsenal_tool in ARSENAL_TOOLS:
+        # Check if tool already exists
+        if not any(t.id == arsenal_tool["id"] for t in all_tools):
+            all_tools.append(ToolSpec(**arsenal_tool))
+    
+    return {
+        "tools": [t.dict() for t in all_tools],
+        "count": len(all_tools)
+    }

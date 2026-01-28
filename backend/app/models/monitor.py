@@ -35,7 +35,7 @@ class SecurityMonitor:
                     dst_ip=event_data.get("dst_ip"),
                     dst_port=event_data.get("dst_port"),
                     type=event_data.get("type"),
-                    severity=event_data.get("severity"),
+                    severity=event_data.get("severity", "Moyen"),
                     details=event_data,
                     status="new"
                 )
@@ -44,17 +44,23 @@ class SecurityMonitor:
             except Exception as e:
                 print(f"Failed to persist event: {e}")
 
-        # Push to Redis Stream for Real-time Workers -> Map
-        from app.core.database import redis_client
-        import os
-        STREAM_NAME = os.getenv("REDIS_STREAM_NAME", "event_stream")
-        if redis_client:
-            try:
-                # Normalize payload
-                payload = json.dumps(event_data, default=str)
-                redis_client.xadd(STREAM_NAME, {"payload": payload}, maxlen=10000)
-            except Exception as e:
-                print(f"Failed to push to stream: {e}")
+        # Real-time Broadcast
+        from app.services.redis_stream import stream_service
+        try:
+            # Sync with the SSE format expected by telemetry.py
+            stream_data = {
+                "id": event_data.get("id", ""),
+                "type": event_data.get("type", "security_event"),
+                "severity": event_data.get("severity", "info"),
+                "message": event_data.get("message") or f"Signal from {event_data.get('src_ip')}",
+                "sensor": "core_monitor",
+                "src_ip": event_data.get("src_ip"),
+                "dst_ip": event_data.get("dst_ip")
+            }
+            stream_service.publish("telemetry:events:default", stream_data)
+        except Exception as e:
+            print(f"Broadcast Failed: {e}")
+
                 
     def load_history(self, db: Session):
         """Load recent events from DB on startup"""

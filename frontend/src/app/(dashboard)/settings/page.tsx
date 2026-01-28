@@ -1,586 +1,428 @@
-"use client"
+"use client";
 
-import { useSession } from "next-auth/react"
+import React, { useState } from "react";
+import { useSession } from "next-auth/react";
+import {
+    Settings, User, Shield, Bell, Key,
+    Database, Globe, Palette, Mail,
+    Trash2, CreditCard, Lock, Eye,
+    EyeOff, Check, AlertCircle, Zap,
+    Monitor, Cpu, Cloud, Terminal
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
+import { FeatureComparison } from "@/components/pricing/FeatureComparison";
 
-import React, { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "../../../components/ui/card"
-import { Button } from "../../../components/ui/button"
-import { Input } from "../../../components/ui/input"
-import { Label } from "../../../components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
-import { Badge } from "../../../components/ui/badge"
-import { Settings, Check, Bell, Key, Shield, Download, Terminal, CheckCircle, XCircle, Loader2, Scan, Globe, FileText, Wrench, Activity } from "lucide-react"
-
-// Scanner installation status type
-interface ScannerModule {
-    id: string;
-    name: string;
-    description: string;
-    icon: React.ReactNode;
-    installed: boolean;
-    version?: string;
-}
+const SECTIONS = [
+    { id: "profile", label: "My Profile", icon: User, desc: "Personal identity and access" },
+    { id: "organization", label: "Organization", icon: Globe, desc: "Workspace and team control" },
+    { id: "security", label: "Security & Auth", icon: Shield, desc: "Encryption and protection" },
+    { id: "notifications", label: "Intelligence Alerts", icon: Bell, desc: "Traffic and scan notifications" },
+    { id: "api", label: "API & Uplinks", icon: Terminal, desc: "External system integrations" },
+    { id: "billing", label: "Billing & Plans", icon: CreditCard, desc: "Subscription and invoices" },
+    { id: "system", label: "Core Modules", icon: Database, desc: "Node health and logging" },
+];
 
 export default function SettingsPage() {
     const { data: session } = useSession();
-    const [scannerModules, setScannerModules] = useState<ScannerModule[]>([
-        {
-            id: 'vuln_scanner',
-            name: 'Vulnerability Scanner',
-            description: 'Local system vulnerability assessment with port scanning, service detection, and security checks',
-            icon: <Scan className="w-5 h-5" />,
-            installed: true,
-            version: '1.0.0'
-        },
-        {
-            id: 'network_scanner',
-            name: 'Network Scanner',
-            description: 'Discover and assess all devices on your local network',
-            icon: <Globe className="w-5 h-5" />,
-            installed: true,
-            version: '1.0.0'
-        },
-        {
-            id: 'pdf_reports',
-            name: 'PDF Report Generator',
-            description: 'Export scan results as detailed PDF reports',
-            icon: <FileText className="w-5 h-5" />,
-            installed: true,
-            version: '1.0.0'
-        },
-        {
-            id: 'remediation_engine',
-            name: 'Remediation Engine',
-            description: 'Automatic fix recommendations and step-by-step remediation guides',
-            icon: <Wrench className="w-5 h-5" />,
-            installed: true,
-            version: '1.0.0'
-        },
-        {
-            id: 'notifications',
-            name: 'Real-time Notifications',
-            description: 'Instant alerts for critical vulnerabilities and security events',
-            icon: <Bell className="w-5 h-5" />,
-            installed: true,
-            version: '1.0.0'
-        },
-    ]);
-
-    const [installing, setInstalling] = useState<string | null>(null);
-    const [notificationSettings, setNotificationSettings] = useState({
-        critical: true,
-        high: true,
-        medium: false,
-        low: false,
-        email: true,
-        push: true,
-        slack: false,
-    });
-
-    const [emailConfig, setEmailConfig] = useState({
-        host: "smtp.gmail.com",
-        port: "587",
-        user: "admin@shield.io",
-        pass: "••••••••",
-        from: "alerts@shield.io"
-    });
-
-    const [apiKeys, setApiKeys] = useState<{ id: string, key: string, created: string, name: string }[]>([
-        { id: '1', key: 'sk-shield-live-8f92-x912', created: '2024-05-15', name: 'Production API' }
-    ]);
-
-    const handleInstall = async (moduleId: string) => {
-        setInstalling(moduleId);
-        // Simulate installation
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setScannerModules(prev => prev.map(m =>
-            m.id === moduleId ? { ...m, installed: true, version: '1.0.0' } : m
-        ));
-        setInstalling(null);
-    };
-
-    const handleUninstall = async (moduleId: string) => {
-        setInstalling(moduleId);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setScannerModules(prev => prev.map(m =>
-            m.id === moduleId ? { ...m, installed: false, version: undefined } : m
-        ));
-        setInstalling(null);
-    };
-
-    const generateApiKey = () => {
-        const newKey = `sk-shield-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 6)}-${Date.now().toString(36)}`;
-        setApiKeys([...apiKeys, {
-            id: Date.now().toString(),
-            key: newKey,
-            created: new Date().toISOString().split('T')[0],
-            name: `Key ${apiKeys.length + 1}`
-        }]);
-    };
+    const [activeSection, setActiveSection] = useState("profile");
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <Settings className="text-cyan-400" /> System Settings
-                </h1>
-                <p className="text-slate-400">Configure global security parameters and scanner modules</p>
+        <div className="space-y-10 animate-fade-in pb-20">
+            {/* Dynamic Header */}
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-8">
+                <div>
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-3 bg-p-500/10 rounded-2xl border border-p-500/20 shadow-[0_0_20px_rgba(167,139,250,0.1)]">
+                            <Settings className="w-6 h-6 text-p-400" />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.4em] text-text-3">System Control Node</span>
+                    </div>
+                    <h1 className="text-display mb-1 text-text-1">Platform <span className="text-p-400">Settings</span></h1>
+                    <p className="text-sm text-text-3 font-medium">Configure global security parameters and neural interfaces.</p>
+                </div>
+
+                <div className="flex items-center gap-4 bg-bg-2/30 px-6 py-4 rounded-2xl border border-white/5 backdrop-blur-md">
+                    <div className="text-right">
+                        <span className="block text-[8px] font-black text-white/40 uppercase tracking-widest">Uplink Status</span>
+                        <span className="text-xs font-black text-green-500 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]" />
+                            ENCRYPTED_LIVE
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <div className="grid grid-cols-12 gap-8 items-start">
+                {/* Nav Sidebar */}
+                <div className="col-span-12 lg:col-span-3 space-y-2">
+                    {SECTIONS.map((section) => (
+                        <button
+                            key={section.id}
+                            onClick={() => setActiveSection(section.id)}
+                            className={cn(
+                                "w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 text-left group relative overflow-hidden",
+                                activeSection === section.id
+                                    ? "bg-p-600/10 border-p-500/40 text-white shadow-[0_0_20px_rgba(167,139,250,0.05)]"
+                                    : "bg-white/2 border-white/5 text-text-3 hover:bg-white/5 hover:text-white"
+                            )}
+                        >
+                            <section.icon className={cn(
+                                "w-5 h-5 transition-colors",
+                                activeSection === section.id ? "text-p-400" : "text-text-3 group-hover:text-p-400"
+                            )} />
+                            <div>
+                                <div className="text-[10px] font-black uppercase tracking-widest mb-0.5">{section.label}</div>
+                                <div className="text-[8px] text-text-3 font-bold opacity-60 uppercase">{section.desc}</div>
+                            </div>
+                            {activeSection === section.id && (
+                                <motion.div
+                                    layoutId="settings-pill"
+                                    className="absolute right-4 w-1.5 h-1.5 bg-p-400 rounded-full shadow-[0_0_8px_#a78bfa]"
+                                />
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Content Area */}
+                <div className="col-span-12 lg:col-span-9">
+                    <div className="bg-bg-1/40 backdrop-blur-xl border border-white/10 rounded-3xl p-8 min-h-[600px] shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-10 opacity-[0.03] pointer-events-none">
+                            <Settings className="w-64 h-64 rotate-12" />
+                        </div>
+
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeSection}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="relative z-10"
+                            >
+                                {activeSection === "profile" && <ProfileSection session={session} />}
+                                {activeSection === "security" && <SecuritySection />}
+                                {activeSection === "organization" && <OrganizationSection session={session} />}
+                                {activeSection === "api" && <ApiSection />}
+                                {activeSection === "notifications" && <NotificationsSection />}
+                                {activeSection === "billing" && <BillingSection session={session} />}
+                                {activeSection === "system" && <SystemSection />}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SectionHeader({ title, desc }: { title: string; desc: string }) {
+    return (
+        <div className="mb-10 space-y-1">
+            <h2 className="text-xl font-black text-text-1 uppercase tracking-tight italic">{title}</h2>
+            <p className="text-xs text-text-3 font-bold uppercase tracking-widest">{desc}</p>
+        </div>
+    );
+}
+
+function ProfileSection({ session }: any) {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Neural Identity" desc="Operator verification credentials" />
+
+            <div className="flex items-center gap-10 p-8 bg-bg-0/30 rounded-3xl border border-white/5">
+                <div className="relative group">
+                    <div className="w-32 h-32 rounded-3xl bg-p-600/20 border-2 border-p-500/30 flex items-center justify-center overflow-hidden shadow-2xl transition-all group-hover:border-p-400">
+                        {session?.user?.image ? (
+                            <img src={session.user.image} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                            <User className="w-12 h-12 text-p-400" />
+                        )}
+                    </div>
+                    <button className="absolute -bottom-2 -right-2 p-3 bg-white text-black rounded-xl shadow-xl hover:scale-110 transition-transform">
+                        <Palette className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="flex-1 space-y-4">
+                    <div>
+                        <div className="text-2xl font-black text-white italic truncate">{session?.user?.name || "OPERATOR_GUEST"}</div>
+                        <div className="text-xs text-p-400 font-mono">BOUCLIER_ID_{session?.user?.id?.substring(0, 8) || "882B_X99"}</div>
+                    </div>
+                    <div className="flex gap-3">
+                        <span className="px-3 py-1 bg-white/5 text-[9px] font-black uppercase text-text-3 border border-white/10 rounded-lg">Level_Pro</span>
+                        <span className="px-3 py-1 bg-white/5 text-[9px] font-black uppercase text-text-3 border border-white/10 rounded-lg">Admin_Priv</span>
+                    </div>
+                </div>
             </div>
 
-            <Tabs defaultValue="modules" className="w-full">
-                <TabsList className="grid w-full grid-cols-5 max-w-3xl bg-slate-900 border border-slate-800">
-                    <TabsTrigger value="modules">Modules</TabsTrigger>
-                    <TabsTrigger value="general">General</TabsTrigger>
-                    <TabsTrigger value="security">Security</TabsTrigger>
-                    <TabsTrigger value="notifications">Notifications</TabsTrigger>
-                    <TabsTrigger value="api">API Keys</TabsTrigger>
-                    <TabsTrigger value="system">System</TabsTrigger>
-                </TabsList>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <InputGroup label="Display Name" defaultValue={session?.user?.name || ""} />
+                <InputGroup label="Email Channel" defaultValue={session?.user?.email || ""} icon={Mail} />
+            </div>
 
-                {/* Modules Tab - Scanner Installation */}
-                <TabsContent value="modules">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Download className="w-5 h-5 text-cyan-400" />
-                                Scanner Modules
-                            </CardTitle>
-                            <CardDescription>Install and manage security scanner components</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {scannerModules.map((module) => (
-                                <div
-                                    key={module.id}
-                                    className="flex items-center justify-between p-4 border border-slate-800 rounded-lg bg-slate-950 hover:border-slate-700 transition-colors"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-3 rounded-lg ${module.installed ? 'bg-cyan-500/10 text-cyan-400' : 'bg-slate-800 text-slate-500'}`}>
-                                            {module.icon}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-slate-200">{module.name}</span>
-                                                {module.installed && (
-                                                    <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                        v{module.version}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            <p className="text-sm text-slate-500 mt-1">{module.description}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        {module.installed ? (
-                                            <>
-                                                <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                                                    onClick={() => handleUninstall(module.id)}
-                                                    disabled={installing === module.id}
-                                                >
-                                                    {installing === module.id ? (
-                                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                                    ) : 'Uninstall'}
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <Button
-                                                size="sm"
-                                                className="bg-cyan-600 hover:bg-cyan-500"
-                                                onClick={() => handleInstall(module.id)}
-                                                disabled={installing === module.id}
-                                            >
-                                                {installing === module.id ? (
-                                                    <>
-                                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                                        Installing...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Download className="w-4 h-4 mr-2" />
-                                                        Install
-                                                    </>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Python Scripts Info */}
-                            <Card className="bg-slate-900/50 border-slate-800">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm flex items-center gap-2">
-                                        <Terminal className="w-4 h-4 text-cyan-400" />
-                                        Python Scanner Scripts
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="text-sm text-slate-400 space-y-2">
-                                    <p>The following Python scripts are available in your installation:</p>
-                                    <div className="bg-slate-950 p-3 rounded-lg font-mono text-xs space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-slate-300">scripts/simulation/vuln_scanner.py</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-slate-300">scripts/simulation/network_scanner.py</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-slate-300">scripts/simulation/attack_sim.py</span>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        Run with: <code className="bg-slate-800 px-2 py-1 rounded">python scripts/simulation/vuln_scanner.py</code>
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* General Tab */}
-                <TabsContent value="general">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Organization Details</CardTitle>
-                            <CardDescription>Manage your workspace profile.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="org">Organization Name</Label>
-                                <Input id="org" value={session?.user?.orgName || "Loading..."} readOnly className="opacity-70" />
-                                <p className="text-[10px] text-slate-500">Managed by System Administrator</p>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Contact Email</Label>
-                                <Input id="email" value={session?.user?.email || ""} readOnly className="opacity-70" />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="plan">Subscription Plan</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input id="plan" value={session?.user?.orgPlan || "FREE"} readOnly className="w-auto opacity-70" />
-                                    {session?.user?.orgPlan === 'FREE' && (
-                                        <Button variant="outline" size="sm" className="text-neon-1 border-neon-1/30 hover:bg-neon-1/10">Upgrade to Pro</Button>
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                        <CardFooter>
-                            <Button disabled>Save Changes (Read Only)</Button>
-                        </CardFooter>
-                    </Card>
-                </TabsContent>
-
-                {/* Security Tab */}
-                <TabsContent value="security">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Security Policies</CardTitle>
-                            <CardDescription>Enforce compliance across the organization.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between p-4 border border-slate-800 rounded-lg bg-slate-950">
-                                <div className="flex items-center gap-3">
-                                    <Shield className="w-5 h-5 text-emerald-500" />
-                                    <div>
-                                        <div className="font-medium text-slate-200">Enforce MFA</div>
-                                        <div className="text-sm text-slate-500">Require 2FA for all users</div>
-                                    </div>
-                                </div>
-                                <div className="h-6 w-11 bg-cyan-500 rounded-full relative cursor-pointer">
-                                    <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between p-4 border border-slate-800 rounded-lg bg-slate-950">
-                                <div className="flex items-center gap-3">
-                                    <Shield className="w-5 h-5 text-amber-500" />
-                                    <div>
-                                        <div className="font-medium text-slate-200">Session Timeout</div>
-                                        <div className="text-sm text-slate-500">Auto-lock after 15 minutes</div>
-                                    </div>
-                                </div>
-                                <div className="h-6 w-11 bg-cyan-500 rounded-full relative cursor-pointer">
-                                    <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between p-4 border border-slate-800 rounded-lg bg-slate-950">
-                                <div className="flex items-center gap-3">
-                                    <Shield className="w-5 h-5 text-red-500" />
-                                    <div>
-                                        <div className="font-medium text-slate-200">Auto-Block Critical Threats</div>
-                                        <div className="text-sm text-slate-500">Automatically quarantine critical findings</div>
-                                    </div>
-                                </div>
-                                <div className="h-6 w-11 bg-slate-700 rounded-full relative cursor-pointer">
-                                    <div className="absolute left-1 top-1 w-4 h-4 bg-slate-400 rounded-full"></div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Notifications Tab */}
-                <TabsContent value="notifications">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Bell className="w-5 h-5 text-cyan-400" />
-                                Notification Settings
-                            </CardTitle>
-                            <CardDescription>Configure when and how you receive security alerts.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Alert Levels */}
-                            <div>
-                                <h3 className="font-medium text-slate-200 mb-3">Alert Levels</h3>
-                                <div className="space-y-3">
-                                    {[
-                                        { key: 'critical', label: 'Critical', color: 'text-red-400', desc: 'Immediate threats requiring urgent action' },
-                                        { key: 'high', label: 'High', color: 'text-orange-400', desc: 'Significant vulnerabilities found' },
-                                        { key: 'medium', label: 'Medium', color: 'text-yellow-400', desc: 'Moderate security concerns' },
-                                        { key: 'low', label: 'Low', color: 'text-green-400', desc: 'Minor issues and informational alerts' },
-                                    ].map((level) => (
-                                        <div key={level.key} className="flex items-center justify-between p-3 border border-slate-800 rounded-lg bg-slate-950">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-3 h-3 rounded-full ${level.color.replace('text', 'bg')}`}></div>
-                                                <div>
-                                                    <div className={`font-medium ${level.color}`}>{level.label}</div>
-                                                    <div className="text-xs text-slate-500">{level.desc}</div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                className={`h-6 w-11 rounded-full relative cursor-pointer ${notificationSettings[level.key as keyof typeof notificationSettings]
-                                                    ? 'bg-cyan-500'
-                                                    : 'bg-slate-700'
-                                                    }`}
-                                                onClick={() => setNotificationSettings(prev => ({
-                                                    ...prev,
-                                                    [level.key]: !prev[level.key as keyof typeof notificationSettings]
-                                                }))}
-                                            >
-                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notificationSettings[level.key as keyof typeof notificationSettings]
-                                                    ? 'right-1'
-                                                    : 'left-1'
-                                                    }`}></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Notification Channels */}
-                            <div>
-                                <h3 className="font-medium text-slate-200 mb-3">Notification Channels</h3>
-                                <div className="space-y-3">
-                                    {[
-                                        { key: 'email', label: 'Email Notifications', icon: '📧', desc: 'Receive alerts via email' },
-                                        { key: 'push', label: 'Push Notifications', icon: '🔔', desc: 'Browser push notifications' },
-                                        { key: 'slack', label: 'Slack Integration', icon: '💬', desc: 'Send alerts to Slack channel' },
-                                    ].map((channel) => (
-                                        <div key={channel.key} className="flex items-center justify-between p-3 border border-slate-800 rounded-lg bg-slate-950">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xl">{channel.icon}</span>
-                                                <div>
-                                                    <div className="font-medium text-slate-200">{channel.label}</div>
-                                                    <div className="text-xs text-slate-500">{channel.desc}</div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                className={`h-6 w-11 rounded-full relative cursor-pointer ${notificationSettings[channel.key as keyof typeof notificationSettings]
-                                                    ? 'bg-cyan-500'
-                                                    : 'bg-slate-700'
-                                                    }`}
-                                                onClick={() => setNotificationSettings(prev => ({
-                                                    ...prev,
-                                                    [channel.key]: !prev[channel.key as keyof typeof notificationSettings]
-                                                }))}
-                                            >
-                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notificationSettings[channel.key as keyof typeof notificationSettings]
-                                                    ? 'right-1'
-                                                    : 'left-1'
-                                                    }`}></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* SMTP Configuration Section (ADDED) */}
-                            {notificationSettings.email && (
-                                <div className="p-4 border border-slate-800 rounded-lg bg-slate-900/50 space-y-4">
-                                    <h3 className="font-medium text-cyan-400 flex items-center gap-2">
-                                        📧 SMTP Email Configuration
-                                    </h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="smtp-host">SMTP Host</Label>
-                                            <Input
-                                                id="smtp-host"
-                                                value={emailConfig.host}
-                                                onChange={(e) => setEmailConfig({ ...emailConfig, host: e.target.value })}
-                                                className="bg-slate-950 border-slate-800"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="smtp-port">Port</Label>
-                                            <Input
-                                                id="smtp-port"
-                                                value={emailConfig.port}
-                                                onChange={(e) => setEmailConfig({ ...emailConfig, port: e.target.value })}
-                                                className="bg-slate-950 border-slate-800"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="smtp-user">Username</Label>
-                                            <Input
-                                                id="smtp-user"
-                                                value={emailConfig.user}
-                                                onChange={(e) => setEmailConfig({ ...emailConfig, user: e.target.value })}
-                                                className="bg-slate-950 border-slate-800"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="smtp-pass">Password</Label>
-                                            <Input
-                                                id="smtp-pass"
-                                                type="password"
-                                                value={emailConfig.pass}
-                                                onChange={(e) => setEmailConfig({ ...emailConfig, pass: e.target.value })}
-                                                className="bg-slate-950 border-slate-800"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2 col-span-2">
-                                            <Label htmlFor="smtp-from">From Email</Label>
-                                            <Input
-                                                id="smtp-from"
-                                                value={emailConfig.from}
-                                                onChange={(e) => setEmailConfig({ ...emailConfig, from: e.target.value })}
-                                                className="bg-slate-950 border-slate-800"
-                                            />
-                                        </div>
-                                    </div>
-                                    <Button size="sm" variant="outline" className="w-full">Test Email Connection</Button>
-                                </div>
-                            )}
-
-                        </CardContent>
-                        <CardFooter>
-                            <Button>Save Notification Settings</Button>
-                        </CardFooter>
-                    </Card>
-                </TabsContent>
-
-                {/* API Keys */}
-                <TabsContent value="api">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>API Key Management</CardTitle>
-                            <CardDescription>Manage keys used for external integrations.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {apiKeys.map((apiKey) => (
-                                <div key={apiKey.id} className="p-4 border border-slate-800 rounded-lg bg-slate-950">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Key className="w-5 h-5 text-cyan-400" />
-                                            <div>
-                                                <div className="font-medium text-slate-200">{apiKey.name}</div>
-                                                <div className="text-sm text-slate-500 font-mono">{apiKey.key}</div>
-                                                <div className="text-xs text-slate-600 mt-1">Created: {apiKey.created}</div>
-                                            </div>
-                                        </div>
-                                        <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">Active</Badge>
-                                    </div>
-                                    <div className="mt-3 flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(apiKey.key);
-                                            }}
-                                        >
-                                            Copy Key
-                                        </Button>
-                                        <Button variant="outline" size="sm" className="text-red-400 border-red-500/30 hover:bg-red-500/10"
-                                            onClick={() => setApiKeys(apiKeys.filter(k => k.id !== apiKey.id))}
-                                        >
-                                            Revoke
-                                        </Button>
-                                    </div>
-                                </div>
-                            ))}
-
-                            <div className="p-4 border border-dashed border-slate-700 rounded-lg bg-slate-900/50 flex flex-col items-center justify-center text-center gap-2">
-                                <Key className="w-8 h-8 text-slate-600" />
-                                <h3 className="text-slate-300 font-medium">Create Additional API Key</h3>
-                                <p className="text-xs text-slate-500 max-w-sm mb-2">Generate a new key to access the SHIELD Threat Detection API programmatically.</p>
-                                <Button variant="outline" size="sm" onClick={generateApiKey}>Generate New Key</Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* System Tab */}
-                <TabsContent value="system">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Activity className="text-cyan-400" /> Module Health
-                                </CardTitle>
-                                <CardDescription>CPU and Memory usage per microservice</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {[
-                                    { name: "API Gateway", cpu: "12%", mem: "140MB", status: "ONLINE", color: "emerald" },
-                                    { name: "Threat Detection Engine", cpu: "45%", mem: "850MB", status: "PROCESSING", color: "cyan" },
-                                    { name: "Log Ingestor", cpu: "5%", mem: "80MB", status: "IDLE", color: "slate" },
-                                    { name: "Traffic Analyzer", cpu: "28%", mem: "320MB", status: "ACTIVE", color: "emerald" }
-                                ].map((s, i) => (
-                                    <div key={i} className="flex items-center justify-between p-3 border border-slate-800 rounded bg-slate-900/50">
-                                        <div>
-                                            <div className="font-bold text-slate-200">{s.name}</div>
-                                            <div className="text-xs text-slate-500">PID: {1000 + i * 50}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-xs font-mono text-cyan-400">CPU: {s.cpu}</div>
-                                            <div className="text-xs font-mono text-indigo-400">MEM: {s.mem}</div>
-                                        </div>
-                                        <Badge variant="outline" className={`text-${s.color}-400 border-${s.color}-500/30`}>{s.status}</Badge>
-                                    </div>
-                                ))}
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Terminal className="text-amber-400" /> System Logs (Tail)
-                                </CardTitle>
-                                <CardDescription>Last 10 system events</CardDescription>
-                            </CardHeader>
-                            <CardContent className="bg-black p-4 font-mono text-xs text-green-400 h-[300px] overflow-auto rounded-b-xl">
-                                <div className="space-y-1">
-                                    <span className="block text-slate-500">[SYSTEM] Backend services initializing...</span>
-                                    <span className="block text-blue-400">[INFO] Detection Engine loaded model v2.1</span>
-                                    <span className="block text-slate-500">[NET] Listening on port 8000 (Gateway)</span>
-                                    <span className="block text-slate-500">[NET] Listening on port 8004 (DDoS)</span>
-                                    <span className="block text-yellow-400">[WARN] High traffic detected on wlan0</span>
-                                    <span className="block text-emerald-400">[AUTH] User 'admin' logged in from 127.0.0.1</span>
-                                    <span className="block text-red-500">[ALERT] SQL Injection blocked from 192.168.1.50</span>
-                                    <span className="block text-slate-500">[INFO] Threat Map updated (5 points found)</span>
-                                    <span className="block text-slate-500">[INFO] Database sync completed in 0.04s</span>
-                                    <span className="block text-cyan-400 animate-pulse">_</span>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-            </Tabs>
+            <div className="flex justify-end gap-4 pt-6 border-t border-white/5">
+                <button className="px-8 py-4 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all">Cancel</button>
+                <button className="px-10 py-4 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl hover:shadow-white/10 transition-all">Sync_Identity</button>
+            </div>
         </div>
-    )
+    );
+}
+
+function SecuritySection() {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Encryption Guard" desc="Authentication layer configuration" />
+
+            <div className="grid gap-6">
+                <PanelRow title="Dual-Phase Auth" desc="Extra biometric or hardware verification" status="DEACTIVATED" color="red" />
+                <PanelRow title="Session Lockdown" desc="Auto-terminate inactive uplinks" status="ACTIVE" color="green" />
+                <PanelRow title="Neural Encryption" desc="Quantum-resistant password hashing" status="HARDENED" color="p-400" />
+            </div>
+
+            <div className="p-8 bg-bg-0/40 border border-white/5 rounded-3xl space-y-8">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-p-400">Update Credentials</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <InputGroup label="Current Pulse" placeholder="••••••••" type="password" />
+                    <div className="hidden md:block" />
+                    <InputGroup label="New Matrix" placeholder="••••••••" type="password" />
+                    <InputGroup label="Confirm Matrix" placeholder="••••••••" type="password" />
+                </div>
+                <button className="w-full py-4 bg-p-600 hover:bg-p-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-p-600/20">
+                    Inject_New_Credentials
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function ApiSection() {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="System Uplinks" desc="Neural connections and system integrations" />
+
+            <div className="space-y-4">
+                {[
+                    { name: "Production API Core", key: "sk_shield_772...f92", date: "Jan 12, 2026" },
+                    { name: "External SIEM Hub", key: "sk_shield_001...x82", date: "Feb 05, 2026" },
+                ].map((api) => (
+                    <div key={api.name} className="flex items-center justify-between p-6 bg-bg-0/30 border border-white/5 rounded-2xl hover:border-p-500/20 transition-all group">
+                        <div className="flex items-center gap-5">
+                            <div className="p-3 bg-p-500/10 rounded-xl text-p-400 group-hover:bg-p-400 group-hover:text-black transition-all">
+                                <Key className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <div className="text-sm font-black text-white italic uppercase tracking-tighter">{api.name}</div>
+                                <div className="text-[10px] font-mono text-text-3 opacity-60 tracking-wider font-bold">{api.key}</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-[8px] font-black text-text-3 uppercase">{api.date}</span>
+                            <button className="p-2 hover:bg-danger/10 text-danger rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <button className="w-full py-10 border-2 border-dashed border-white/5 hover:border-p-500/20 rounded-3xl flex flex-col items-center justify-center gap-3 transition-all group">
+                <div className="p-4 bg-white/5 rounded-2xl text-text-3 group-hover:text-p-400 group-hover:scale-110 transition-all">
+                    <Terminal className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] font-black uppercase text-text-3 tracking-[0.3em]">Initialize_New_Uplink</span>
+            </button>
+        </div>
+    );
+}
+
+function NotificationsSection() {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Comms Center" desc="Traffic alerts and intelligence signal" />
+
+            <div className="space-y-3">
+                <ToggleRow title="Security Anomalies" desc="Critical threat level alerts" active />
+                <ToggleRow title="Scan Reports" desc="Completion matrix for system audits" active />
+                <ToggleRow title="Audit Logs" desc="Low-level telemetry tracking" />
+                <ToggleRow title="AI Insights" desc="Sentinel intelligence commentary" active />
+            </div>
+        </div>
+    );
+}
+
+function OrganizationSection({ session }: any) {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Governance" desc="Workspace and hierarchy settings" />
+
+            <div className="p-8 bg-gradient-to-br from-p-600/10 to-transparent border border-p-500/20 rounded-3xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-20"><Cloud className="w-20 h-20 text-p-400" /></div>
+                <div className="relative z-10">
+                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-2">{session?.user?.orgName || "BOUCLIER_PRIME"}</h3>
+                    <p className="text-xs text-text-3 font-bold uppercase tracking-widest mb-6 border-b border-white/5 pb-6">Premium Workspace Deployment</p>
+
+                    <div className="grid grid-cols-3 gap-8">
+                        <StatCell label="Active Nodes" value="142" />
+                        <StatCell label="Team Slots" value="12 / 50" />
+                        <StatCell label="Tier Status" value="ENTERPRISE" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-4 pt-10">
+                <h3 className="text-xs font-black uppercase tracking-widest text-text-3 mb-6 flex items-center gap-3">
+                    <div className="w-4 h-px bg-white/20" /> Tactical Team <div className="w-4 h-px bg-white/20" />
+                </h3>
+                {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex items-center justify-between p-4 bg-bg-0/20 border border-white/5 rounded-2xl">
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-bg-2 border border-white/5 flex items-center justify-center text-text-3">
+                                <User className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <div className="text-xs font-black text-white italic uppercase">Operator_0{i + 1}</div>
+                                <div className="text-[9px] text-text-3 opacity-60 font-bold uppercase">ops_scout_unit@bouclier.ma</div>
+                            </div>
+                        </div>
+                        <span className="text-[8px] font-black px-2 py-1 bg-p-600/20 text-p-400 border border-p-500/30 rounded uppercase tracking-widest">Sentinel</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function SystemSection() {
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Neural Health" desc="System core metrics and logging" />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-6 bg-bg-0/30 border border-white/5 rounded-3xl space-y-6">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-p-400 flex items-center gap-2">
+                        <Monitor className="w-4 h-4" /> Hardware Matrix
+                    </h4>
+                    <div className="space-y-4">
+                        <MetricRow label="CPU Lattice" value="44%" color="p-400" />
+                        <MetricRow label="Memory Pool" value="8.2 GB" color="neon-1" />
+                        <MetricRow label="Internal Hub" value="OPTIMAL" color="green-500" />
+                    </div>
+                </div>
+
+                <div className="p-6 bg-black rounded-3xl border border-white/5 space-y-4 font-mono">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500 flex items-center gap-2 font-sans">
+                        <Database className="w-4 h-4" /> Live Log Feed
+                    </h4>
+                    <div className="h-40 overflow-y-auto text-[8px] space-y-1 text-green-500/70 custom-scrollbar pr-4 italic">
+                        <div className="flex gap-2"><span className="opacity-30">[13:14:22]</span><span className="text-blue-400">&gt;</span> SESSION_REHASH_COMPLETE</div>
+                        <div className="flex gap-2"><span className="opacity-30">[13:14:25]</span><span className="text-blue-400">&gt;</span> CRYPTO_LATTICE_SYNC: OK</div>
+                        <div className="flex gap-2"><span className="opacity-30">[13:14:30]</span><span className="text-amber-500">!</span> UPLINK_JITTER_DETECTED: 1.2ms</div>
+                        <div className="flex gap-2"><span className="opacity-30">[13:14:42]</span><span className="text-blue-400">&gt;</span> HEARTBEAT_ECHO_STABLE</div>
+                        <div className="flex gap-2 animate-pulse"><span className="opacity-30">[13:15:01]</span><span className="text-p-400">&gt;</span> LISTENING_FOR_PULSE_</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// UI HELPER COMPONENTS
+function BillingSection({ session }: any) {
+    const plan = session?.user?.orgPlan || "FREE";
+    return (
+        <div className="space-y-10">
+            <SectionHeader title="Subscription Plan" desc="Compare and manage your tier" />
+
+            <div className="p-8 bg-bg-2/30 border border-white/5 rounded-3xl">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Current Plan: {plan}</h3>
+                        <p className="text-xs text-text-3 font-bold uppercase tracking-widest mt-1">Renewal: Jan 12, 2027</p>
+                    </div>
+                    <button className="px-6 py-2 bg-p-600 hover:bg-p-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-p-600/20">
+                        Manage_Billing
+                    </button>
+                </div>
+
+                <h4 className="text-[10px] font-black text-text-3 uppercase tracking-[0.2em] mb-6 block">Plan Comparison Matrix</h4>
+                <div className="border border-white/5 rounded-2xl overflow-hidden bg-bg-0/30">
+                    <FeatureComparison />
+                </div>
+            </div>
+        </div>
+    );
+}
+function InputGroup({ label, defaultValue, type = "text", placeholder, icon: Icon }: any) {
+    return (
+        <div className="space-y-2">
+            <label className="text-[10px] font-black text-text-3 uppercase tracking-[0.2em] ml-2 italic">{label}</label>
+            <div className="relative group">
+                {Icon && <Icon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-3 group-focus-within:text-p-400 transition-colors" />}
+                <input
+                    type={type}
+                    defaultValue={defaultValue}
+                    placeholder={placeholder}
+                    className={cn(
+                        "w-full px-6 py-4 bg-bg-0 border border-white/5 rounded-2xl text-xs font-black text-white italic tracking-widest focus:outline-none focus:border-p-500/50 focus:bg-white/5 transition-all shadow-inner",
+                        Icon ? "pl-14" : ""
+                    )}
+                />
+            </div>
+        </div>
+    );
+}
+
+function PanelRow({ title, desc, status, color }: any) {
+    return (
+        <div className="flex items-center justify-between p-6 bg-bg-2/30 border border-white/5 rounded-3xl hover:border-white/10 transition-all">
+            <div className="flex items-center gap-5">
+                <div className="w-12 h-12 rounded-2xl bg-bg-0 border border-white/5 flex items-center justify-center text-text-3 shadow-inner">
+                    <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                    <div className="text-xs font-black text-white uppercase italic">{title}</div>
+                    <div className="text-[9px] text-text-3 opacity-60 font-bold uppercase tracking-wider">{desc}</div>
+                </div>
+            </div>
+            <div className={cn("px-4 py-1 rounded-lg text-[9px] font-black border uppercase tracking-widest", `text-${color} border-${color}/20 bg-${color}/5`)}>
+                {status}
+            </div>
+        </div>
+    );
+}
+
+function ToggleRow({ title, desc, active }: any) {
+    return (
+        <div className="flex items-center justify-between p-6 bg-bg-0/30 border border-white/5 rounded-3xl hover:bg-bg-0/40 transition-all">
+            <div>
+                <div className="text-xs font-black text-white uppercase italic tracking-tighter">{title}</div>
+                <div className="text-[10px] text-text-3 opacity-60 font-bold uppercase italic">{desc}</div>
+            </div>
+            <button className={cn("w-14 h-7 rounded-full relative transition-all duration-500 shadow-inner", active ? "bg-p-600 shadow-[0_0_15px_rgba(124,58,237,0.3)]" : "bg-bg-3 border border-white/5")}>
+                <div className={cn("absolute top-1.5 w-4 h-4 bg-white rounded-md shadow-xl transition-all duration-300", active ? "right-1.5 rotate-45" : "left-1.5 rotate-0")} />
+            </button>
+        </div>
+    );
+}
+
+function StatCell({ label, value }: any) {
+    return (
+        <div className="space-y-1">
+            <div className="text-[8px] font-black text-text-3 uppercase tracking-widest opacity-50">{label}</div>
+            <div className="text-xl font-black text-white italic italic">{value}</div>
+        </div>
+    );
+}
+
+function MetricRow({ label, value, color }: any) {
+    return (
+        <div className="space-y-2">
+            <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
+                <span className="text-text-3">{label}</span>
+                <span className={`text-${color}`}>{value}</span>
+            </div>
+            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className={cn("h-full transition-all duration-1000", `bg-${color}`)} style={{ width: value.includes('%') ? value : '65%' }} />
+            </div>
+        </div>
+    );
 }

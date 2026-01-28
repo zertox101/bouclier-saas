@@ -14,7 +14,8 @@ pandas
 python-dotenv
 websockets
 python-jose[cryptography]
-passlib[bcrypt]
+passlib
+bcrypt==4.0.1
 torch==2.1.0+cpu
 joblib
 geoip2

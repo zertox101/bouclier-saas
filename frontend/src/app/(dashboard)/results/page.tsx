@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { UnifiedScanResult, Finding } from "@/types/schema";
 import type { LogEntry } from "@/types/tools";
 import { Badge } from "@/components/ui/badge";
@@ -25,21 +25,7 @@ interface JobMeta {
 }
 
 export default function ResultsPage() {
-    return (
-        <Suspense fallback={
-            <div className="h-[calc(100vh-4rem)] flex flex-col items-center justify-center bg-black/40 text-zinc-400">
-                <Activity className="w-12 h-12 mb-4 animate-pulse" />
-                <p>Initializing Results Engine...</p>
-            </div>
-        }>
-            <ResultsContent />
-        </Suspense>
-    );
-}
-
-function ResultsContent() {
     const toolsApiBase = process.env.NEXT_PUBLIC_TOOLS_API_BASE || "http://localhost:8100";
-    const searchParams = useSearchParams();
     const [jobHistory, setJobHistory] = useState<JobMeta[]>([]);
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [activeScan, setActiveScan] = useState<UnifiedScanResult | null>(null);
@@ -146,13 +132,14 @@ function ResultsContent() {
         const history: JobMeta[] = stored ? JSON.parse(stored) : [];
         setJobHistory(history);
 
-        const paramId = searchParams.get("job_id");
+        const params = new URLSearchParams(window.location.search);
+        const paramId = params.get("job_id");
         if (paramId) {
             setSelectedJobId(paramId);
         } else if (history.length > 0) {
             setSelectedJobId(history[0].job_id);
         }
-    }, [searchParams]);
+    }, []);
 
     useEffect(() => {
         if (!selectedJobId) {

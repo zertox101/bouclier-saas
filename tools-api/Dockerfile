@@ -2,6 +2,7 @@ FROM kalilinux/kali-rolling
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SAFE_MODE=true
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -63,8 +64,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
     tmux \
     python3-scapy \
+    radare2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Python-based security tools
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed \
+    cloudsplaining \
+    scoutsuite \
+    prowler \
+    frida-tools \
+    mobsf \
+    pwntools \
+    requests \
+    beautifulsoup4 \
+    bloodhound \
+    impacket \
+    ldap3 \
+    dnspython
+
+# Install Empire (PowerShell post-exploitation framework)
+# RUN git clone --depth=1 https://github.com/BC-SECURITY/Empire /opt/Empire && \
+#    cd /opt/Empire && \
+#    pip3 install --break-system-packages --ignore-installed -r setup/requirements.txt && \
+#    ln -s /opt/Empire/empire /usr/local/bin/empire
+
+# Note: Ghidra requires 500MB+ download and Java runtime
+# Mimikatz is Windows-only, IDA Pro is commercial, Shodan/Maltego require API keys
 
 WORKDIR /opt/tools-api
 

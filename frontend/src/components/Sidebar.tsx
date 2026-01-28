@@ -11,25 +11,54 @@ import {
   Zap, Globe, Database, ShieldAlert,
   Activity, Crosshair, Radar, Lock, Server,
   LogOut as LogoutIcon,
-  User
+  User, Cpu, Wifi,
+  Package, Eye, Star, Skull
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
-const navItems = [
-  { icon: LayoutDashboard, label: "Global Overview", href: "/overview", count: "HQ" },
-  { icon: Activity, label: "Command Center", href: "/dashboard", count: "LIVE" },
-  { icon: Zap, label: "Sentinel AI", href: "/sentinel", count: "CORE" },
-  { icon: Activity, label: "Traffic Analysis", href: "/traffic" },
-  { icon: ShieldAlert, label: "Security Alerts", href: "/alerts", count: "12" },
-  { icon: Crosshair, label: "Tactical Tools", href: "/tools" },
-  { icon: Radar, label: "Web Scanner", href: "/scans" },
-  { icon: Globe, label: "Threat Intel", href: "/threat-map-pro" },
-  { icon: Server, label: "Asset Inventory", href: "/assets", count: "142" },
-  { icon: Database, label: "Log Archive", href: "/logs" },
-  { icon: Lock, label: "Governance", href: "/reports" },
-  { icon: Settings, label: "System Config", href: "/settings" },
+// Navigation structured by category
+const navSections = [
+  {
+    title: "Command Center",
+    items: [
+      { icon: LayoutDashboard, label: "Global Overview", href: "/overview", count: "HQ" },
+      { icon: Activity, label: "Live Dashboard", href: "/dashboard", count: "LIVE" },
+    ]
+  },
+  {
+    title: "AI & Intelligence",
+    items: [
+      { icon: Zap, label: "AI Analyst", href: "/sentinel", count: "GPT", isPro: true },
+      { icon: Wifi, label: "Traffic Analysis", href: "/traffic" },
+      { icon: Globe, label: "Threat Intel", href: "/threat-map-pro", isPro: true },
+    ]
+  },
+  {
+    title: "Security Operations",
+    items: [
+      { icon: ShieldAlert, label: "Security Alerts", href: "/alerts", count: "12" },
+      { icon: Eye, label: "Asset Monitor", href: "/assets", count: "142" },
+      { icon: Search, label: "Log Archive", href: "/logs" },
+    ]
+  },
+  {
+    title: "Offensive Tools",
+    items: [
+      { icon: Crosshair, label: "Tactical Tools", href: "/tools", count: "60+" },
+      { icon: Skull, label: "Red Team Ops", href: "/red-team", isPro: true },
+      { icon: Radar, label: "Web Scanner", href: "/scans", isPro: true },
+      { icon: Package, label: "Arsenal Browser", href: "/arsenal", count: "48" },
+    ]
+  },
+  {
+    title: "Administration",
+    items: [
+      { icon: Lock, label: "Governance", href: "/reports" },
+      { icon: Settings, label: "Settings", href: "/settings" },
+    ]
+  }
 ];
 
 export default function Sidebar() {
@@ -41,7 +70,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 bottom-0 z-[60] bg-bg-1 border-r border-border-1 transition-all duration-500 ease-in-out group",
+        "fixed left-0 top-0 bottom-0 z-[60] bg-bg-1 border-r border-border-1 transition-all duration-500 ease-in-out group flex flex-col",
         isCollapsed ? "w-20" : "w-72"
       )}
       onMouseEnter={() => setIsCollapsed(false)}
@@ -118,54 +147,82 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto no-scrollbar">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 relative group",
-                isActive ? "bg-white/5 text-white" : "text-text-3 hover:bg-white/5 hover:text-white"
-              )}
-            >
-              <div className="relative shrink-0">
-                <item.icon className={cn(
-                  "w-5 h-5 transition-all duration-500",
-                  isActive ? "text-white" : "group-hover:text-p-400"
-                )} />
-                {isActive && (
-                  <div className="absolute inset-0 blur-md bg-white/20 animate-pulse" />
-                )}
-              </div>
+      <nav className="flex-1 py-4 px-3 space-y-4 overflow-y-auto custom-scrollbar">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            {/* Section Header */}
+            <div className={cn(
+              "px-4 mb-2 transition-all duration-300",
+              isCollapsed ? "opacity-0" : "opacity-100"
+            )}>
+              <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">
+                {section.title}
+              </span>
+            </div>
 
-              <div className={cn(
-                "flex-1 flex items-center justify-between transition-all duration-300 whitespace-nowrap",
-                isCollapsed ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
-              )}>
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {item.label}
-                </span>
-                {item.count && (
-                  <span className={cn(
-                    "text-[8px] font-black px-1.5 py-0.5 rounded-full border",
-                    isActive ? "bg-white text-black border-white" : "bg-white/5 text-text-3 border-white/10"
-                  )}>
-                    {item.count}
-                  </span>
-                )}
-              </div>
+            {/* Section Items */}
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 relative group",
+                      isActive ? "bg-white/5 text-white" : "text-text-3 hover:bg-white/5 hover:text-white"
+                    )}
+                  >
+                    <div className="relative shrink-0">
+                      <item.icon className={cn(
+                        "w-5 h-5 transition-all duration-500",
+                        isActive ? "text-white" : "group-hover:text-p-400"
+                      )} />
+                      {isActive && (
+                        <div className="absolute inset-0 blur-md bg-white/20 animate-pulse" />
+                      )}
+                    </div>
 
-              {isActive && (
-                <motion.div
-                  layoutId="sidebar-active"
-                  className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-[0_0_15px_rgba(255,255,255,0.5)]"
-                />
-              )}
-            </Link>
-          );
-        })}
+                    <div className={cn(
+                      "flex-1 flex items-center justify-between transition-all duration-300 whitespace-nowrap",
+                      isCollapsed ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
+                    )}>
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        {item.label}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {item.isPro && (
+                          <span className={cn(
+                            "text-[6px] font-black px-1.5 py-0.5 rounded-full border flex items-center gap-0.5",
+                            isActive ? "bg-neon-1 text-black border-neon-1" : "bg-p-600/20 text-p-400 border-p-500/30"
+                          )}>
+                            <Star className="w-2 h-2" />
+                            PRO
+                          </span>
+                        )}
+                        {item.count && (
+                          <span className={cn(
+                            "text-[8px] font-black px-1.5 py-0.5 rounded-full border",
+                            isActive ? "bg-white text-black border-white" : "bg-white/5 text-text-3 border-white/10"
+                          )}>
+                            {item.count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {isActive && (
+                      <motion.div
+                        layoutId="sidebar-active"
+                        className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-[0_0_15px_rgba(255,255,255,0.5)]"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer / User */}

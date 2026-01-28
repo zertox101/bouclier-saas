@@ -53,7 +53,7 @@ class LLMClient:
         self.base_url = os.getenv("LLM_BASE_URL", "").strip().rstrip("/")
         self.model = os.getenv("LLM_MODEL", "llama3.2:3b").strip()
         self.api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
-        self.timeout = float(os.getenv("LLM_TIMEOUT", "20"))
+        self.timeout = float(os.getenv("LLM_TIMEOUT", "10"))
         self.system_prompt = os.getenv(
             "LLM_SYSTEM_PROMPT",
             "You are Sentinel, a SOC assistant. Be concise and actionable.",
@@ -163,6 +163,9 @@ class LLMSecurityAnalyst:
                 return response
 
         q = user_query.lower()
+        
+        if any(word in q for word in ["salam", "fine", "chkon", "mrehab"]):
+            return "Salam! I am Sentinel, your AI Analyst. Neural core is syncing, but I am monitoring live. Kifach n9der n3awnk today?"
         
         if "threat" in q or "attack" in q:
             if context and context.get("active_threats"):
