@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ENDPOINTS, fetchAPI } from '@/lib/api-config';
+import { apiClient, ApiError } from '@/lib/api-client';
 import {
     Table,
     TableBody,
@@ -10,8 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ShieldAlert, MoreHorizontal, ExternalLink, Loader2 } from 'lucide-react';
-import { useNotifications } from '@/components/NotificationSystem';
-import { format } from 'date-fns';
+import { useNotifications } from '@/components/shared/NotificationSystem';
 
 interface Alert {
     id: string;
@@ -20,23 +19,15 @@ interface Alert {
     status: 'active' | 'investigating' | 'mitigated' | 'dismissed';
     source: string;
     created_at?: string;
-    time?: string; // Fallback for mock
-    description?: string;
+    timestamp?: string;
+    category?: string;
 }
 
-const MOCK_ALERTS: Alert[] = [
-    { id: 'ALT-001', title: 'Credential Stuffing Attempt', severity: 'high', status: 'active', source: '203.0.113.42', time: '2m ago' },
-    { id: 'ALT-002', title: 'Unauthorized API Access', severity: 'critical', status: 'investigating', source: 'Internal-Apps', time: '5m ago' },
-    { id: 'ALT-003', title: 'Suspicious DLL Load', severity: 'medium', status: 'mitigated', source: 'WS-DESKTOP-04', time: '12m ago' },
-    { id: 'ALT-004', title: 'Data Export to Unkown IP', severity: 'high', status: 'active', source: 'Storage-Server-01', time: '18m ago' },
-    { id: 'ALT-005', title: 'Brute Force Detection', severity: 'low', status: 'dismissed', source: 'Auth-Gateway', time: '45m ago' },
-];
-
 const SEVERITY_COLORS = {
-    low: 'bg-info/20 text-info',
-    medium: 'bg-warning/20 text-warning',
-    high: 'bg-orange-500/20 text-orange-500',
-    critical: 'bg-danger/20 text-danger',
+    low: 'bg-info/20 text-info border-info/20',
+    medium: 'bg-warning/20 text-warning border-warning/20',
+    high: 'bg-orange-500/20 text-orange-500 border-orange-500/20',
+    critical: 'bg-danger/20 text-danger border-danger/20',
 };
 
 const STATUS_COLORS = {
@@ -46,61 +37,55 @@ const STATUS_COLORS = {
     dismissed: 'text-text-3',
 };
 
-export function AlertsTable() {
+interface AlertsTableProps {
+    limit?: number;
+}
+
+export function AlertsTable({ limit }: AlertsTableProps = {}) {
     const { addNotification } = useNotifications();
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [loading, setLoading] = useState(true);
-    const [usingMock, setUsingMock] = useState(false);
 
     useEffect(() => {
         const loadAlerts = async () => {
             setLoading(true);
             try {
-                const { data, error } = await fetchAPI<{ items: Alert[] }>(ENDPOINTS.ALERTS);
+                const data = await apiClient('/api/telemetry/stats');
+                
+                const items = (data.alerts || []).map((a: any) => ({
+                    id: a.id,
+                    title: a.title,
+                    severity: a.severity,
+                    status: a.status === 'new' ? 'active' : a.status,
+                    source: a.source,
+                    timestamp: a.timestamp,
+                    category: a.category
+                }));
 
-                if (error || !data) {
-                    throw new Error(error || 'Failed to fetch alerts');
-                }
-
-                // Map backend format if necessary, or just use as is
-                // Assuming backend returns { items: [...] } or just array. 
-                // Adjusting based on standard API response patterns.
-                // If data is array directly:
-                const items = Array.isArray(data) ? data : (data.items || []);
-                setAlerts(items);
-                setUsingMock(false);
+                setAlerts(limit ? items.slice(0, limit) : items);
             } catch (err) {
                 console.error("Alerts API Error:", err);
-                setAlerts(MOCK_ALERTS);
-                setUsingMock(true);
-                addNotification({
-                    type: 'warning',
-                    title: 'Live Data Unavailable',
-                    message: 'Showing cached/mock alert data.'
-                });
             } finally {
                 setLoading(false);
             }
         };
 
         loadAlerts();
-    }, [addNotification]);
+    }, [limit]);
+
     return (
         <div className="glass-card rounded-2xl overflow-hidden relative">
-            {usingMock && (
-                <div className="absolute top-0 left-0 w-full h-1 bg-amber-500/50 z-50" title="Using offline data" />
-            )}
             <div className="p-4 border-b border-border-1 flex items-center justify-between bg-bg-2/50">
                 <div className="flex items-center gap-2">
-                    <ShieldAlert className={`h-5 w-5 ${usingMock ? 'text-warning' : 'text-danger'}`} />
+                    <ShieldAlert className="h-5 w-5 text-danger" />
                     <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
-                        Security Alerts {usingMock && <span className="text-[10px] text-warning bg-warning/10 px-2 py-0.5 rounded ml-2">OFFLINE MODE</span>}
+                        Real-time Security Alerts
                     </h3>
                 </div>
                 <button
                     className="text-[10px] text-p-400 font-bold uppercase tracking-widest hover:text-p-500 transition-colors"
                 >
-                    View All
+                    Live Log
                 </button>
             </div>
 

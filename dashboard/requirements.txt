@@ -1,6 +1,0 @@
-streamlit
-pydeck
-pandas
-sqlalchemy
-psycopg2-binary
-requests

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Button } from "../../../components/ui/button"
 import { Badge } from "../../../components/ui/badge"
@@ -8,8 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Input } from "../../../components/ui/input"
 import { Brain, FileText, Search, AlertCircle, CheckCircle } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 export default function LogsPage() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
     const [logs, setLogs] = useState<any[]>([])
     const [stats, setStats] = useState({ total: 0, critical: 0, high: 0 })
     const [loading, setLoading] = useState(true)
@@ -34,18 +34,13 @@ export default function LogsPage() {
                 .map((entry: any) => entry.message)
                 .filter(Boolean)
                 .join("\n")
-            const res = await fetch(`${apiBase}/api/sentinel/analyze-tools`, {
+            const data = await apiClient<any>("/api/sentinel/analyze-tools", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+                json: {
                     tool_name: "log_review",
                     logs: logText
-                })
+                }
             })
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`)
-            }
-            const data = await res.json()
             setAnalysis({
                 summary: data.summary,
                 threats: data.threats || [],
@@ -71,11 +66,7 @@ export default function LogsPage() {
         const fetchLogs = async () => {
             try {
                 setError(null)
-                const res = await fetch(`${apiBase}/api/events/logs?limit=200`);
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`);
-                }
-                const data = await res.json();
+                const data = await apiClient<any>("/api/events/logs?limit=200");
                 const mappedLogs = (Array.isArray(data) ? data : []).map((entry: any, idx: number) => ({
                     id: entry.id ? `LOG-${entry.id}` : `LOG-${1000 + idx}`,
                     time: new Date((entry.timestamp_epoch || Date.now() / 1000) * 1000).toLocaleTimeString(),

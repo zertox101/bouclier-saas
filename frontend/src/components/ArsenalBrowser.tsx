@@ -1,228 +1,443 @@
 "use client";
 
-import { useState } from "react";
-import { Search, ExternalLink, Shield, Terminal, Zap, Lock, Globe, Database, Server, Cpu, Wifi, Eye, CheckCircle, XCircle } from "lucide-react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Search, Shield, Terminal, Zap, Globe, Database, Server, Cpu, Wifi, Eye, Target, Loader2, Play, Activity, Crosshair, Map, Filter, Maximize2, X, ChevronRight, Command } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
+import { API_CONFIG } from "@/lib/api-config";
+import TerminalShell from "./terminal/TerminalShell";
 
-// Categories mapping to icons
+// Advanced Palantir-style Icons
 const CATEGORY_ICONS: Record<string, any> = {
-    "Android Utilities": Cpu,
-    "Anonymity Tools": Eye,
-    "Anti-virus Evasion Tools": Shield,
-    "Cloud Platform Attack Tools": Database,
-    "Exfiltration Tools": ExternalLink,
-    "Exploit Development Tools": Terminal,
     "Network Tools": Wifi,
+    "Web Exploitation": Crosshair,
     "OSINT": Globe,
-    "Reverse Engineering": Cpu,
-    "Web Exploitation": Globe,
-    "Windows Utilities": Server,
-    "Vulnerability Databases": Database,
+    "Post-Exploitation": Server,
+    "Exploit Development": Terminal,
+    "Advanced": Cpu,
+    "Intelligence": Shield,
+    "Playbooks": Zap,
+    "Audit": Activity,
 };
 
 type Tool = {
+    id: string;
     name: string;
     description: string;
-    url: string;
     category: string;
-    installed: boolean;
-    toolId?: string;
+    version?: string;
+    status?: string;
+    risk_level?: string;
+    installed?: boolean;
+    url?: string;
     command?: string;
+    mitre?: string;
+    usage?: string;
+    tactical?: string;
 };
 
-const TOOLS_DATA: Tool[] = [
-    // Network Reconnaissance
-    { name: "Nmap", description: "Network exploration and security auditing.", url: "https://nmap.org/", category: "Network Tools", installed: true, toolId: "network_recon", command: "nmap" },
-    { name: "Masscan", description: "Fastest Internet port scanner.", url: "https://github.com/robertdavidgraham/masscan", category: "Network Tools", installed: true, toolId: "mass_scan", command: "masscan" },
-    { name: "ARP-Scan", description: "Local network discovery via ARP.", url: "https://github.com/royhills/arp-scan", category: "Network Tools", installed: true, toolId: "network_scanner", command: "arp-scan" },
-    { name: "Wireshark", description: "Network protocol analyzer.", url: "https://www.wireshark.org/", category: "Network Tools", installed: true, command: "tshark" },
-    { name: "tcpdump", description: "Packet capture and analysis.", url: "https://www.tcpdump.org/", category: "Network Tools", installed: true, toolId: "packet_sniffer", command: "tcpdump" },
-
-    // Web Exploitation
-    { name: "SQLmap", description: "Automatic SQL injection and database takeover.", url: "http://sqlmap.org/", category: "Web Exploitation", installed: true, toolId: "sqlmap_scan", command: "sqlmap" },
-    { name: "Nikto", description: "Web server scanner.", url: "https://cirt.net/Nikto2", category: "Web Exploitation", installed: true, toolId: "web_scanner", command: "nikto" },
-    { name: "Gobuster", description: "Directory/file & DNS busting tool.", url: "https://github.com/OJ/gobuster", category: "Web Exploitation", installed: true, toolId: "dir_bruteforce", command: "gobuster" },
-    { name: "ffuf", description: "Fast web fuzzer.", url: "https://github.com/ffuf/ffuf", category: "Web Exploitation", installed: true, toolId: "web_fuzz", command: "ffuf" },
-    { name: "WhatWeb", description: "Web technology fingerprinting.", url: "https://github.com/urbanadventurer/WhatWeb", category: "Web Exploitation", installed: true, toolId: "http_fingerprint", command: "whatweb" },
-    { name: "Wapiti", description: "Web application vulnerability scanner.", url: "https://wapiti-scanner.github.io/", category: "Web Exploitation", installed: true, command: "wapiti" },
-    { name: "Nuclei", description: "Fast vulnerability scanner based on templates.", url: "https://github.com/projectdiscovery/nuclei", category: "Web Exploitation", installed: true, toolId: "nuclei_scan", command: "nuclei" },
-
-    // Password Attacks
-    { name: "Hydra", description: "Network logon cracker supporting many protocols.", url: "https://github.com/vanhauser-thc/thc-hydra", category: "Password Attacks", installed: true, toolId: "password_auditor", command: "hydra" },
-    { name: "John the Ripper", description: "Fast password cracker.", url: "https://www.openwall.com/john/", category: "Password Attacks", installed: true, command: "john" },
-    { name: "Hashcat", description: "Advanced password recovery.", url: "https://hashcat.net/hashcat/", category: "Password Attacks", installed: true, command: "hashcat" },
-    { name: "Crunch", description: "Wordlist generator.", url: "https://sourceforge.net/projects/crunch-wordlist/", category: "Password Attacks", installed: true, command: "crunch" },
-
-    // OSINT
-    { name: "theHarvester", description: "E-mail, subdomain and people names harvester.", url: "https://github.com/laramies/theHarvester", category: "OSINT", installed: true, toolId: "theharvester_scan", command: "theHarvester" },
-    { name: "Amass", description: "In-depth DNS enumeration and network mapping.", url: "https://github.com/OWASP/Amass", category: "OSINT", installed: true, toolId: "amass_enum", command: "amass" },
-    { name: "Recon-ng", description: "Full-featured reconnaissance framework.", url: "https://github.com/lanmaster53/recon-ng", category: "OSINT", installed: true, command: "recon-ng" },
-    { name: "Subfinder", description: "Subdomain discovery tool.", url: "https://github.com/projectdiscovery/subfinder", category: "OSINT", installed: true, command: "subfinder" },
-    { name: "Shodan", description: "Search engine for Internet-connected devices.", url: "https://www.shodan.io/", category: "OSINT", installed: false },
-    { name: "Maltego", description: "Interactive data mining tool.", url: "https://www.maltego.com/", category: "OSINT", installed: false },
-
-    // Exploitation Frameworks
-    { name: "Metasploit", description: "The world's most used penetration testing framework.", url: "https://www.metasploit.com/", category: "Exploit Frameworks", installed: true, command: "msfconsole" },
-    { name: "ExploitDB", description: "Archive of public exploits and vulnerable software.", url: "https://www.exploit-db.com/", category: "Exploit Frameworks", installed: true, command: "searchsploit" },
-
-    // Post-Exploitation
-    { name: "CrackMapExec", description: "Swiss army knife for pentesting networks.", url: "https://github.com/byt3bl33d3r/CrackMapExec", category: "Post-Exploitation", installed: true, toolId: "cme_smb", command: "crackmapexec" },
-    { name: "Mimikatz", description: "Extract credentials from Windows memory.", url: "https://github.com/gentilkiwi/mimikatz", category: "Post-Exploitation", installed: false },
-    { name: "BloodHound", description: "Active Directory attack path analysis.", url: "https://github.com/BloodHoundAD/BloodHound", category: "Post-Exploitation", installed: true, command: "bloodhound-python" },
-    { name: "Empire", description: "PowerShell post-exploitation framework.", url: "https://github.com/EmpireProject/Empire", category: "Post-Exploitation", installed: true, command: "empire" },
-
-    // Wireless
-    { name: "Aircrack-ng", description: "WiFi security auditing tools suite.", url: "https://www.aircrack-ng.org/", category: "Wireless", installed: true, command: "aircrack-ng" },
-    { name: "Wifite", description: "Automated wireless attack tool.", url: "https://github.com/derv82/wifite2", category: "Wireless", installed: true, command: "wifite" },
-
-    // Forensics
-    { name: "Binwalk", description: "Firmware analysis tool.", url: "https://github.com/ReFirmLabs/binwalk", category: "Forensics", installed: true, command: "binwalk" },
-    { name: "Foremost", description: "File carving and data recovery.", url: "http://foremost.sourceforge.net/", category: "Forensics", installed: true, command: "foremost" },
-    { name: "YARA", description: "Pattern matching for malware research.", url: "https://virustotal.github.io/yara/", category: "Forensics", installed: true, command: "yara" },
-
-    // Reverse Engineering
-    { name: "Ghidra", description: "NSA's software reverse engineering suite.", url: "https://ghidra-sre.org/", category: "Reverse Engineering", installed: false },
-    { name: "IDA Pro", description: "The premier disassembler and debugger.", url: "https://hex-rays.com/ida-pro/", category: "Reverse Engineering", installed: false },
-    { name: "Radare2", description: "Open-source reverse engineering framework.", url: "https://rada.re/", category: "Reverse Engineering", installed: true, command: "r2" },
-
-    // Cloud Security
-    { name: "CloudSplaining", description: "AWS IAM security assessment.", url: "https://cloudsplaining.readthedocs.io/", category: "Cloud Security", installed: true, command: "cloudsplaining" },
-    { name: "ScoutSuite", description: "Multi-cloud security auditing tool.", url: "https://github.com/nccgroup/ScoutSuite", category: "Cloud Security", installed: true, command: "scout" },
-    { name: "Prowler", description: "AWS security best practices assessment.", url: "https://github.com/prowler-cloud/prowler", category: "Cloud Security", installed: true, command: "prowler" },
-
-    // Mobile Security
-    { name: "MobSF", description: "Mobile Security Framework for Android/iOS.", url: "https://github.com/MobSF/Mobile-Security-Framework-MobSF", category: "Mobile Security", installed: true, command: "mobsf" },
-    { name: "Frida", description: "Dynamic instrumentation toolkit.", url: "https://frida.re/", category: "Mobile Security", installed: true, command: "frida" },
-
-    // Utilities
-    { name: "OpenSSL", description: "Cryptography and SSL/TLS toolkit.", url: "https://www.openssl.org/", category: "Utilities", installed: true, toolId: "tls_check", command: "openssl" },
-    { name: "cURL", description: "Command line HTTP client.", url: "https://curl.se/", category: "Utilities", installed: true, toolId: "http_probe", command: "curl" },
-    { name: "Netcat", description: "TCP/IP swiss army knife.", url: "http://netcat.sourceforge.net/", category: "Utilities", installed: true, toolId: "port_check", command: "nc" },
-    { name: "SSLScan", description: "SSL/TLS scanner.", url: "https://github.com/rbsec/sslscan", category: "Utilities", installed: true, command: "sslscan" },
-];
-
 export default function ArsenalBrowser() {
+    const [tools, setTools] = useState<Tool[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
     const [search, setSearch] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+    const [target, setTarget] = useState("");
+    const [isLaunching, setIsLaunching] = useState(false);
+    const [lastJobId, setLastJobId] = useState<string | null>(null);
+    const [terminalLines, setTerminalLines] = useState<string[]>([]);
+    const [terminalTab, setTerminalTab] = useState<"logs" | "shell">("logs");
 
-    const filteredTools = TOOLS_DATA.filter(tool => {
-        const matchesSearch = tool.name.toLowerCase().includes(search.toLowerCase()) ||
-            tool.description.toLowerCase().includes(search.toLowerCase());
+    useEffect(() => {
+        apiClient("/api/tools")
+            .then(d => {
+                if (d.tools) {
+                    setTools(d.tools.map((t: any) => ({ ...t, installed: true })));
+                    setCategories(d.categories || []);
+                }
+            })
+            .catch(() => {});
+    }, []);
+    const [jobStatus, setJobStatus] = useState<string>("idle");
+    const [terminalMode, setTerminalMode] = useState<"minimized" | "expanded">("minimized");
+    const [findings, setFindings] = useState<any[]>([]);
+    const [reportUrl, setReportUrl] = useState<string | null>(null);
+    const [remediatingIdx, setRemediatingIdx] = useState<number | null>(null);
+
+    const terminalRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (terminalRef.current) {
+            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+        }
+    }, [terminalLines]);
+
+    useEffect(() => {
+        if (!lastJobId) return;
+
+        const pollLogs = async () => {
+            try {
+                const res = await fetch(`${API_CONFIG.TOOLS_API_BASE}/tools/jobs/${lastJobId}`, {
+                    headers: { "X-API-KEY": API_CONFIG.TOOLS_API_KEY }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        const newLogs = data.logs.map((l: any) => `[${l.level.toUpperCase()}] ${l.message}`);
+                        setTerminalLines(prev => {
+                            const filtered = newLogs.filter((nl: string) => !prev.includes(nl));
+                            return [...prev, ...filtered];
+                        });
+                    }
+                    setJobStatus(data.status);
+                    if (["completed", "failed", "stopped"].includes(data.status)) {
+                        setTerminalLines(prev => [...prev, `Job ${lastJobId.substring(0,8)} finished with status: ${data.status}`, ""]);
+                        if (data.findings) {
+                            setFindings(data.findings.structured_findings || []);
+                            if (data.findings.report_url) {
+                                setReportUrl(`${API_CONFIG.TOOLS_API_BASE}${data.findings.report_url}`);
+                            }
+                        }
+                    } else {
+                        setTimeout(pollLogs, 1500);
+                    }
+                }
+            } catch (err) { console.error(err); }
+        };
+
+        pollLogs();
+    }, [lastJobId]);
+
+    const handleLaunch = async () => {
+        if (!selectedTool || !target) return;
+        setIsLaunching(true);
+        setFindings([]);
+        setReportUrl(null);
+        setTerminalLines(prev => [...prev, `kali@nexus:~$ ${selectedTool.command} ${target}`, ""]);
+        setJobStatus("initiating...");
+        setTerminalMode("expanded");
+        
+        try {
+            const res = await fetch(`${API_CONFIG.TOOLS_API_BASE}/tools/run`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-KEY": API_CONFIG.TOOLS_API_KEY
+                },
+                body: JSON.stringify({
+                    tool_id: selectedTool.toolId,
+                    input: { target }
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLastJobId(data.job_id);
+            } else {
+                setJobStatus("failed");
+                setTerminalLines(prev => [...prev, "!! Error: API validation failed.", ""]);
+            }
+        } catch (err) {
+            setJobStatus("failed");
+            setTerminalLines(prev => [...prev, "!! Error: Uplink failure.", ""]);
+        } finally {
+            setIsLaunching(false);
+        }
+    };
+
+    const handleRemediate = async (idx: number) => {
+        if (!lastJobId) return;
+        setRemediatingIdx(idx);
+        try {
+            const res = await fetch(`${API_CONFIG.TOOLS_API_BASE}/remediation/execute`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-KEY": API_CONFIG.TOOLS_API_KEY
+                },
+                body: JSON.stringify({
+                    job_id: lastJobId,
+                    finding_index: idx
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === "success") {
+                setTerminalLines(prev => [...prev, `[SUCCESS] Remediation executed for: ${data.finding_name}`, data.stdout, ""]);
+            } else {
+                setTerminalLines(prev => [...prev, `[ERROR] Remediation failed: ${data.stderr || "Unknown error"}`, ""]);
+            }
+        } catch (err) {
+            setTerminalLines(prev => [...prev, "[ERROR] Uplink failure during remediation.", ""]);
+        } finally {
+            setRemediatingIdx(null);
+        }
+    };
+
+    const filteredTools = useMemo(() => (tools.length > 0 ? tools : []).filter(tool => {
+        const matchesSearch = tool.name.toLowerCase().includes(search.toLowerCase()) || tool.description.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = selectedCategory ? tool.category === selectedCategory : true;
         return matchesSearch && matchesCategory;
-    });
-
-    const categories = Array.from(new Set(TOOLS_DATA.map(t => t.category)));
+    }), [search, selectedCategory, tools]);
 
     return (
-        <div className="h-full w-full bg-[#0a0e1a] text-white p-8 overflow-y-auto">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                    <div>
-                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                            Offensive Security Arsenal
-                        </h1>
-                        <p className="text-slate-400 mt-2">
-                            Curated elite penetration testing tools & resources.
-                        </p>
-                    </div>
+        <div className="h-full w-full bg-[#030508] text-[#e2e8f0] font-sans overflow-hidden flex flex-col selection:bg-blue-900 selection:text-white relative gotham-bg">
+            <style>{`
+                ::-webkit-scrollbar { width: 4px; }
+                ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.2); border-radius: 10px; }
+                .gotham-bg {
+                    background-image: radial-gradient(circle at 50% 50%, #0d1520 0%, #030508 100%);
+                }
+                .tool-card {
+                    background: rgba(13, 21, 32, 0.7);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .tool-card:hover {
+                    border-color: rgba(59, 130, 246, 0.3);
+                    background: rgba(13, 21, 32, 0.9);
+                    transform: translateY(-2px);
+                }
+                .tool-card.selected {
+                    border-color: #2563eb;
+                    background: rgba(37, 99, 235, 0.05);
+                    box-shadow: 0 0 30px rgba(37, 99, 235, 0.1);
+                }
+            `}</style>
 
-                    <div className="relative w-full md:w-96">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-5 w-5 text-slate-500" />
+            {/* TOP HUD */}
+            <header className="h-14 border-b border-white/5 bg-[#0A0C10]/80 backdrop-blur-xl flex items-center justify-between px-8 shrink-0 z-20">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <Terminal className="h-5 w-5 text-blue-500" />
+                        <h1 className="text-[12px] font-black text-white uppercase tracking-[0.3em]">KALI <span className="text-blue-500">ARSENAL</span></h1>
+                    </div>
+                </div>
+                <div className="flex items-center gap-8 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981]" /> SYNC: STABLE</div>
+                    <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> NODE: KALI-MASTER-01</div>
+                </div>
+            </header>
+
+            <div className="flex-1 flex overflow-hidden relative">
+                
+                {/* SEARCH & FILTERS BAR */}
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[600px] z-30">
+                    <div className="relative group">
+                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                       <input
+                           type="text"
+                           placeholder="Search tactical toolsets..."
+                           value={search}
+                           onChange={(e) => setSearch(e.target.value)}
+                           className="w-full bg-[#0d1520]/80 backdrop-blur-2xl border border-white/10 rounded-2xl py-3 pl-12 pr-6 text-sm text-white placeholder:text-slate-600 focus:border-blue-500/50 outline-none transition-all shadow-2xl"
+                       />
+                    </div>
+                    <div className="flex justify-center gap-2 mt-4">
+                       <button onClick={() => setSelectedCategory(null)} className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all", !selectedCategory ? "bg-blue-600 border-blue-500 text-white" : "bg-white/5 border-white/5 text-slate-500 hover:border-white/10")}>ALL</button>
+                       {categories.map(cat => (
+                         <button key={cat} onClick={() => setSelectedCategory(cat)} className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all", selectedCategory === cat ? "bg-blue-600 border-blue-500 text-white" : "bg-white/5 border-white/5 text-slate-500 hover:border-white/10")}>{cat.replace(' Tools', '')}</button>
+                       ))}
+                    </div>
+                </div>
+
+                {/* GRID OF TOOLS */}
+                <div className="flex-1 overflow-y-auto p-32 pt-40 custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                        {filteredTools.map(tool => {
+                            const isSelected = selectedTool?.name === tool.name;
+                            const Icon = CATEGORY_ICONS[tool.category] || Target;
+                            return (
+                                <motion.div
+                                    key={tool.name}
+                                    layoutId={tool.name}
+                                    onClick={() => setSelectedTool(tool)}
+                                    className={cn("tool-card p-6 rounded-3xl cursor-pointer relative overflow-hidden group", isSelected && "selected")}
+                                >
+                                    <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-colors", isSelected ? "bg-blue-600 text-white" : "bg-white/5 text-slate-500 group-hover:bg-blue-600/10 group-hover:text-blue-500")}>
+                                        <Icon className="h-6 w-6" />
+                                    </div>
+                                    <h3 className="text-sm font-black text-white uppercase tracking-tight mb-2">{tool.name}</h3>
+                                    <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{tool.description}</p>
+                                    
+                                    <div className="mt-6 flex items-center justify-between">
+                                       <span className="text-[9px] font-mono text-blue-500 font-bold">{tool.command}</span>
+                                       {tool.mitre && <span className="text-[8px] font-black text-slate-600 border border-white/5 px-1.5 py-0.5 rounded uppercase">{tool.mitre}</span>}
+                                    </div>
+                                </motion.div>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                {/* TOOL ACTION OVERLAY */}
+                <AnimatePresence>
+                   {selectedTool && (
+                     <motion.div 
+                        initial={{ opacity: 0, x: 400 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 400 }}
+                        className="w-[450px] border-l border-white/10 bg-[#0d1520]/95 backdrop-blur-3xl p-10 flex flex-col z-40 shadow-[-20px_0_60px_rgba(0,0,0,0.8)]"
+                     >
+                        <div className="flex justify-between items-start mb-10">
+                           <div className="w-16 h-16 bg-blue-600/10 border border-blue-500/20 rounded-3xl flex items-center justify-center">
+                              <Zap className="w-8 h-8 text-blue-500" />
+                           </div>
+                           <button onClick={() => setSelectedTool(null)} className="text-slate-500 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search tools (e.g., 'injection', 'audit')..."
-                            className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all placeholder:text-slate-600"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                </span>
-                                <span className="text-[10px] font-bold text-emerald-400">LIVE DB</span>
+                        
+                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter mb-2">{selectedTool.name}</h2>
+                        <p className="text-[12px] text-slate-400 font-medium leading-relaxed mb-10">{selectedTool.description}</p>
+                        
+                        <div className="space-y-6 flex-1 overflow-y-auto custom-scrollbar pr-4">
+                           <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Engagement Parameter</div>
+                              <input 
+                                 type="text" 
+                                 placeholder="e.g. 192.168.1.1 or target.com"
+                                 value={target}
+                                 onChange={e => setTarget(e.target.value)}
+                                 className="w-full bg-black/40 border border-white/10 rounded-xl py-4 px-6 text-sm font-mono text-blue-400 placeholder:text-slate-700 outline-none focus:border-blue-500/50 transition-all"
+                              />
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-4">
+                              <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                 <div className="text-[8px] font-black text-slate-500 uppercase mb-1">MITRE Map</div>
+                                 <div className="text-xs font-black text-white">{selectedTool.mitre || "T1000"}</div>
+                              </div>
+                              <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                 <div className="text-[8px] font-black text-slate-500 uppercase mb-1">Tactical</div>
+                                 <div className="text-xs font-black text-blue-500">{selectedTool.tactical || "Generic"}</div>
+                              </div>
+                           </div>
+
+                           <div className="pt-6 border-t border-white/5">
+                              <button 
+                                 onClick={handleLaunch}
+                                 disabled={isLaunching || !target}
+                                 className="w-full py-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3"
+                              >
+                                 {isLaunching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+                                 Initialize Deployment
+                              </button>
+                           </div>
+
+                           {/* Mythos Findings Section */}
+                           {findings.length > 0 && (
+                             <div className="mt-10 pt-10 border-t border-white/10 space-y-6">
+                                <div className="flex items-center justify-between">
+                                   <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Mythos Neural Findings</div>
+                                   {reportUrl && (
+                                     <a 
+                                        href={reportUrl} 
+                                        target="_blank" 
+                                        className="text-[9px] font-black text-white bg-emerald-600/20 border border-emerald-500/30 px-3 py-1 rounded-full flex items-center gap-2 hover:bg-emerald-600/40 transition-all"
+                                     >
+                                        <Database className="w-3 h-3" /> Download Tactical Report
+                                     </a>
+                                   )}
+                                </div>
+                                
+                                {findings.map((f, i) => (
+                                  <div key={i} className="bg-white/5 border border-white/5 rounded-2xl p-6 group/finding">
+                                     <div className="flex justify-between items-start mb-2">
+                                        <h4 className="text-sm font-bold text-white">{f.name}</h4>
+                                        <span className={cn("text-[8px] font-black px-2 py-0.5 rounded uppercase", 
+                                          f.severity === 'critical' ? 'bg-red-600 text-white' : 
+                                          f.severity === 'high' ? 'bg-orange-600 text-white' : 'bg-blue-600 text-white'
+                                        )}>{f.severity}</span>
+                                     </div>
+                                     <p className="text-[10px] text-slate-500 mb-4">{f.description}</p>
+                                     
+                                     {f.remediation_script && (
+                                       <div className="mt-4 pt-4 border-t border-white/5">
+                                          <div className="text-[8px] font-black text-slate-600 uppercase mb-2">Remediation Script</div>
+                                          <pre className="bg-black/50 p-3 rounded-lg text-[9px] font-mono text-emerald-400 overflow-x-auto mb-3 max-h-24 custom-scrollbar">
+                                             {f.remediation_script}
+                                          </pre>
+                                          <button 
+                                             onClick={() => handleRemediate(i)}
+                                             disabled={remediatingIdx !== null}
+                                             className="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 text-[9px] font-black uppercase rounded-lg border border-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                                          >
+                                             {remediatingIdx === i ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
+                                             Deploy Fix Sequence
+                                          </button>
+                                       </div>
+                                     )}
+                                  </div>
+                                ))}
+                             </div>
+                           )}
+                        </div>
+                     </motion.div>
+                   )}
+                </AnimatePresence>
+            </div>
+
+            {/* KALI TERMINAL BOTTOM OVERLAY — Interactive Shell + Job Logs */}
+            <AnimatePresence>
+                {(lastJobId || terminalTab === "shell") && (
+                    <motion.div 
+                        initial={{ y: "100%" }}
+                        animate={{ y: terminalMode === "expanded" ? 0 : "calc(100% - 40px)" }}
+                        transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+                        className="fixed bottom-0 left-0 right-0 h-[420px] bg-[#050505] border-t border-blue-500/30 flex flex-col z-[50] shadow-[0_-20px_50px_rgba(0,0,0,0.8)]"
+                    >
+                        <div className="h-10 bg-[#0d1117] border-b border-white/5 flex items-center justify-between px-6">
+                            <div className="flex items-center gap-4">
+                               <Terminal className="w-4 h-4 text-blue-500" />
+                               <span className="text-[9px] font-black text-white uppercase tracking-widest">Nexus Tactical Shell — Kali Rolling</span>
+                               {selectedTool && (
+                                 <div className="flex gap-1 ml-4 border-l border-white/10 pl-4">
+                                   <button onClick={() => setTerminalTab("logs")} className={cn("px-3 py-1 rounded text-[8px] font-black uppercase tracking-wider transition-colors", terminalTab === "logs" ? "bg-blue-600/20 text-blue-400 border border-blue-500/30" : "text-slate-500 hover:text-white")}>Job Logs</button>
+                                   <button onClick={() => setTerminalTab("shell")} className={cn("px-3 py-1 rounded text-[8px] font-black uppercase tracking-wider transition-colors", terminalTab === "shell" ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30" : "text-slate-500 hover:text-white")}>Interactive Shell</button>
+                                 </div>
+                               )}
+                               <div className="flex gap-2 items-center ml-2">
+                                  <div className={cn("w-1.5 h-1.5 rounded-full", jobStatus === 'running' ? "bg-amber-500 animate-pulse" : "bg-slate-500")} />
+                                  <span className="text-[8px] font-black text-slate-500 uppercase">[{jobStatus}]</span>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                               <button onClick={() => setTerminalMode(prev => prev === "expanded" ? "minimized" : "expanded")}>
+                                 {terminalMode === "expanded" ? <Minimize2 className="w-3.5 h-3.5 text-slate-500" /> : <Maximize2 className="w-3.5 h-3.5 text-slate-500" />}
+                               </button>
+                               <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-500 cursor-pointer" onClick={(e) => { setLastJobId(null); setTerminalLines([]); setTerminalTab("logs"); }} />
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                {/* Categories */}
-                <div className="flex flex-wrap gap-2 mb-8">
-                    <button
-                        onClick={() => setSelectedCategory(null)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === null
-                            ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
-                            : "bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                            }`}
-                    >
-                        All
-                    </button>
-                    {categories.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === cat
-                                ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
-                                : "bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                                }`}
-                        >
-                            {cat}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredTools.map((tool, idx) => {
-                        const Icon = CATEGORY_ICONS[tool.category] || Terminal;
-                        return (
-                            <motion.a
-                                key={idx}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.05 }}
-                                href={tool.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="group relative bg-[#0f1419] border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all duration-300"
-                            >
-                                <div className="absolute top-4 right-4 flex items-center gap-2">
-                                    {tool.installed ? (
-                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                                            <CheckCircle className="h-3 w-3 text-emerald-400" />
-                                            <span className="text-[10px] font-bold text-emerald-400">INSTALLED</span>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-800/50 border border-slate-700">
-                                            <XCircle className="h-3 w-3 text-slate-500" />
-                                            <span className="text-[10px] font-bold text-slate-500">NOT INSTALLED</span>
-                                        </div>
-                                    )}
-                                    <ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-cyan-400 transition-colors" />
-                                </div>
-
-                                <div className="h-10 w-10 rounded-lg bg-slate-900 flex items-center justify-center mb-4 group-hover:bg-cyan-500/10 transition-colors">
-                                    <Icon className="h-6 w-6 text-slate-400 group-hover:text-cyan-400 transition-colors" />
-                                </div>
-
-                                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">
-                                    {tool.name}
-                                </h3>
-                                <div className="text-xs font-semibold text-slate-500 mb-3 px-2 py-1 rounded bg-slate-900 inline-block">
-                                    {tool.category}
-                                </div>
-                                <p className="text-sm text-slate-400 leading-relaxed">
-                                    {tool.description}
-                                </p>
-                            </motion.a>
-                        );
-                    })}
-                </div>
-            </div>
+                        {terminalTab === "logs" ? (
+                          <div ref={terminalRef} className="flex-1 p-4 overflow-y-auto font-mono text-[11px] leading-relaxed custom-scrollbar selection:bg-blue-500 selection:text-white bg-[#050505]">
+                             {terminalLines.length === 0 && (
+                               <div className="text-slate-600 text-center mt-20 text-[10px] uppercase tracking-widest">No job running — launch a tool first</div>
+                             )}
+                             {terminalLines.map((line, i) => (
+                               <div key={i} className={cn("mb-0.5 break-all",
+                                 line.startsWith("kali@nexus") ? "text-emerald-500 font-bold" :
+                                 line.startsWith("!!") ? "text-red-500" :
+                                 line.includes("[ERROR]") ? "text-red-400" :
+                                 line.includes("[SUCCESS]") ? "text-emerald-400" :
+                                 "text-slate-300"
+                               )}>
+                                 {line}
+                               </div>
+                             ))}
+                             {jobStatus === 'running' && (
+                               <div className="w-2 h-4 bg-blue-500 animate-pulse mt-2" />
+                             )}
+                          </div>
+                        ) : (
+                          <div className="flex-1 relative bg-[#050505]">
+                            <TerminalShell visible={true} wsUrl={typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8100/ws/shell` : 'ws://localhost:8100/ws/shell'} title="Kali Shell — root@nexus" />
+                          </div>
+                        )}
+                    </motion.div>
+                )}
+                {!lastJobId && terminalTab !== "shell" && (
+                  <button onClick={() => setTerminalTab("shell")} className="fixed bottom-6 right-6 z-[60] px-6 py-3 bg-emerald-600/20 border border-emerald-500/30 rounded-2xl text-[9px] font-black text-emerald-400 uppercase tracking-widest hover:bg-emerald-600/30 transition-all flex items-center gap-3 shadow-2xl">
+                    <Terminal className="w-4 h-4" /> Open Kali Terminal
+                  </button>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

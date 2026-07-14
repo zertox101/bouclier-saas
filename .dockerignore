@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.next
+out
+build
+dist
+.venv
+venv
+env
+*.log
+*.sqlite
+backend/app/ml/models
+frontend/node_modules
+frontend/.next

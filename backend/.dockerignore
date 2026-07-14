@@ -1,0 +1,111 @@
+# ── Docker Build Ignore (Elite-Grade Production) ────────────────
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+venv/
+venv_new/
+.venv/
+env/
+
+# Data & Databases
+pg_data/
+data/
+shield.db
+*.sqlite
+*.db
+*.db-journal
+
+# ML Large Data & Models (Binary Formats)
+app/ml/data/
+**/*.onnx
+**/*.safetensors
+**/*.pt
+**/*.pkl
+**/*.h5
+**/*.pb
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+k8s/secrets/
+*.kubeconfig
+.github/secrets/
+mkcert/
+certs/
+
+# Logs & Temp
+logs/
+*.log
+*.tmp
+temp/
+coverage/
+htmlcov/
+.trivy/
+.semgrep/
+.bandit/
+sbom/
+*.spdx.json
+*.cdx.json
+
+# Build & Dist (Node & Caches)
+node_modules/
+**/node_modules/
+.pnpm-store/
+.yarn/
+.npm-cache/
+.next/
+out/
+dist/
+build/
+*.egg-info/
+
+# Infrastructure & Observability
+.terraform/
+*.tfstate
+*.tfstate.backup
+docker-compose.override.yml
+grafana-data/
+prometheus-data/
+loki-data/
+redis-data/
+rabbitmq-data/
+kafka-data/
+
+# Git & IDE Metadata
+.git/
+.gitmodules
+.gitattributes
+.gitignore
+.dockerignore
+.vscode/
+.idea/
+.history/
+
+# Security Reports
+reports/
+scans/
+exports/
+
+# Runtime & Archives
+*.pid
+*.sock
+*.tar
+*.gz
+*.zip
+*.bak
+*.old
+*.swp
+*.swo

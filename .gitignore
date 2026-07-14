@@ -1,51 +1,115 @@
-# --- Dependencies ---
-node_modules/
-**/node_modules/
-venv/
-**/venv/
-.venv/
-**/.venv/
-__pycache__/
-**/__pycache__/
-*.pyc
+# ── Project-Wide Ignore (Elite-Grade Production) ────────────────
 
-# --- Environment & Secrets ---
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.tox/
+.nox/
+venv/
+venv_new/
+.venv/
+env/
+
+# Environment & Secrets
 .env
-.env.local
-.env.*.local
-**/.env
-**/.env.local
+.env.*
+!.env.example
 *.pem
 *.key
+*.crt
+secrets/
+credentials/
+k8s/secrets/
+*.kubeconfig
+.github/*.env
+.github/secrets/
+mkcert/
+certs/
 
-# --- Build Outputs ---
+# Docker & Infrastructure
+pg_data/
+docker-data/
+docker-volumes/
+infra/postgres_data/
+infra/qdrant_data/
+docker-compose.override.yml
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Observability & Queues
+grafana-data/
+prometheus-data/
+loki-data/
+redis-data/
+rabbitmq-data/
+kafka-data/
+
+# Logs & Temp
+logs/
+infra/logs/
+*.log
+*.tmp
+temp/
+coverage/
+htmlcov/
+.trivy/
+.semgrep/
+.bandit/
+sbom/
+*.spdx.json
+*.cdx.json
+
+# Node / Frontend & Caches
+node_modules/
+**/node_modules/
+.pnpm-store/
+.yarn/
+.npm-cache/
 .next/
-**/.next/
 out/
-**/out/
-build/
-**/build/
 dist/
-**/dist/
-.vercel/
+build/
 
-# --- Databases & Data ---
-*.db
-*.sqlite
-*.sqlite3
-postgres_data/
-ollama_data/
-redis_data/
-/data/
-**/postgres_data/
-**/ollama_data/
-**/redis_data/
+# AI Cache & Binary Models
+.cache/
+hf_cache/
+transformers_cache/
+**/*.onnx
+**/*.safetensors
+**/*.pt
+**/*.h5
+**/*.pb
+**/*.pkl
 
-# --- IDE & System ---
+# IDE & Runtime
 .vscode/
 .idea/
+.history/
+*.pid
+*.sock
+*.swp
+*.swo
+
+# Security Reports & Data
+reports/
+scans/
+exports/
+data/
+app/ml/data/
+
+# Databases
+*.db
+*.sqlite
+shield.db
+
+# OS & Archives
 .DS_Store
 Thumbs.db
-*.log
-npm-debug.log*
-yarn-debug.log*
+*.tar
+*.gz
+*.zip
+*.bak

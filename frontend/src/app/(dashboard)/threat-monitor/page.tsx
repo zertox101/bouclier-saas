@@ -1,569 +1,456 @@
 'use client';
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Activity, AlertTriangle, Shield, Globe, Wifi, Database, Lock,
     Radio, Zap, Eye, Server, TrendingUp, TrendingDown, Clock,
     Download, RefreshCw, Filter, Search, MapPin, Terminal,
     Network, FileText, Bell, CheckCircle, XCircle, Minus,
-    BarChart3, PieChart, Circle, ArrowUp, ArrowDown
+    BarChart3, PieChart, Circle, ArrowUp, ArrowDown, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { useNotificationContext } from '@/components/notifications/NotificationProvider';
+import { apiClient } from '@/lib/api-client';
 
-// Types
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
+
 interface ThreatEvent {
     id: string;
     timestamp: string;
     sourceIp: string;
-    destIp: string;
     geo: string;
-    service: string;
     eventType: string;
-    severity: 'CRITIQUE' | 'ÉLEVÉ' | 'MOYEN' | 'NOUVEAU';
-    status: 'Actif' | 'Résolu' | 'En cours';
+    severity: string;
+    status: string;
+    description: string;
 }
 
-interface TrafficMetric {
-    label: string;
-    value: number;
-    unit: string;
-    trend: 'up' | 'down' | 'stable';
-    risk: 'low' | 'medium' | 'high';
+interface TelemetryStats {
+  severity: Record<string, number>;
+  timeline: { time: string; count: number }[];
+  // Backend retourne alerts avec: id, type, severity, message, src_ip, country, created_at
+  alerts: {
+    id: string | number;
+    type: string;
+    severity: string;
+    message: string;
+    src_ip: string;
+    country: string;
+    created_at: string;
+    // champs legacy optionnels
+    title?: string;
+    source?: string;
+    category?: string;
+    timestamp?: string;
+    status?: string;
+  }[];
+  health: {
+    status?: string;
+    active_nodes?: number;
+    // champs legacy optionnels
+    total?: number;
+    online?: number;
+    offline?: number;
+    degraded?: number;
+  };
+  counters: {
+    events: number;
+    alerts: number;
+    incidents: number;
+  };
+  attack_types?: { name: string; count: number }[];
+  top_talkers?: { ip: string; count: number }[];
 }
-
-const severityStyles = {
-    CRITIQUE: 'text-red-500 bg-red-500/10 border-red-500/30',
-    ÉLEVÉ: 'text-orange-500 bg-orange-500/10 border-orange-500/30',
-    MOYEN: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30',
-    NOUVEAU: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/30',
-};
-
-const statusStyles = {
-    'Actif': 'text-red-400 bg-red-500/10 border-red-500/20',
-    'Résolu': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    'En cours': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-};
 
 export default function ThreatMonitorPage() {
-    const [isLive, setIsLive] = useState(true);
-    const [latency, setLatency] = useState(12);
-    const [timeRange, setTimeRange] = useState('5m');
-    const [totalEvents, setTotalEvents] = useState(116);
-    const [criticalNodes, setCriticalNodes] = useState(27);
-    const [events, setEvents] = useState<ThreatEvent[]>([]);
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [stats, setStats] = useState<TelemetryStats | null>(null);
+    const [liveEvents, setLiveEvents] = useState<ThreatEvent[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedSeverity, setSelectedSeverity] = useState('Toutes Sévérités');
-    const [selectedStatus, setSelectedStatus] = useState('Tous Statuts');
+    const [isLive, setIsLive] = useState(true);
+    const { notify } = useNotificationContext();
 
-    // Stats
-    const [stats, setStats] = useState({
-        totalEvents: 0,
-        criticalAlerts: 0,
-        blockedAttacks: 0,
-        activeThreats: 0,
-        mttr: '--',
-        mttd: '--',
-        uptime: '--',
-        coverage: '24/7'
-    });
+    const fetchStats = useCallback(async () => {
+        try {
+            const data = await apiClient('/api/telemetry/stats');
 
-    // Traffic Metrics
-    const protocolMetrics: TrafficMetric[] = [
-        { label: 'SSH', value: 0, unit: 'req', trend: 'stable', risk: 'low' },
-        { label: 'HTTP/S', value: 0, unit: 'req', trend: 'stable', risk: 'low' },
-        { label: 'SMTP', value: 0, unit: 'req', trend: 'stable', risk: 'low' },
-        { label: 'FTP', value: 0, unit: 'req', trend: 'stable', risk: 'low' },
-        { label: 'DNS', value: 0, unit: 'req', trend: 'stable', risk: 'low' },
-    ];
+            // Normalise la structure health — backend retourne active_nodes, pas online/total
+            const normalizedHealth = {
+                total:   data.health?.total   ?? data.health?.active_nodes ?? 1,
+                online:  data.health?.online  ?? data.health?.active_nodes ?? 1,
+                offline: data.health?.offline ?? 0,
+                degraded:data.health?.degraded ?? 0,
+                status:  data.health?.status  ?? "online",
+                active_nodes: data.health?.active_nodes ?? 1,
+            };
 
-    const threatMetrics: TrafficMetric[] = [
-        { label: 'Web Portal', value: 0, unit: '/s', trend: 'stable', risk: 'low' },
-        { label: 'Data Harvest', value: 0, unit: '/s', trend: 'stable', risk: 'low' },
-        { label: 'Phishing', value: 0, unit: '/s', trend: 'stable', risk: 'low' },
-        { label: 'C2 Server', value: 0, unit: '/s', trend: 'stable', risk: 'low' },
-        { label: 'Exfiltration', value: 0, unit: '/s', trend: 'stable', risk: 'low' },
-    ];
+            // Normalise severity — backend retourne critical/high/medium/low (minuscules)
+            const rawSev = data.severity || {};
+            const normalizedSeverity: Record<string, number> = {
+                CRITICAL: rawSev.critical ?? rawSev.Critique ?? 0,
+                HIGH:     rawSev.high     ?? rawSev["Élevé"] ?? 0,
+                MEDIUM:   rawSev.medium   ?? rawSev.Moyen    ?? 0,
+                INFO:     rawSev.low      ?? rawSev.Faible   ?? 0,
+            };
 
-    // Severity distribution (for donut chart)
-    const severityDistribution = {
-        critique: 0,
-        élevé: 0,
-        moyen: 0,
-        nouveau: 0
-    };
+            setStats({ ...data, health: normalizedHealth, severity: normalizedSeverity });
 
-    // Simulate real-time updates
-    useEffect(() => {
-        if (autoRefresh && isLive) {
-            const interval = setInterval(() => {
-                setLatency(Math.floor(Math.random() * 10) + 8);
-            }, 2000);
-            return () => clearInterval(interval);
+            // Normalise les alerts — backend retourne type/message/src_ip/country/created_at
+            const rawAlerts: any[] = data.alerts || [];
+            const mapped: ThreatEvent[] = rawAlerts.map((a: any) => {
+                const ts = a.created_at || a.timestamp || new Date().toISOString();
+                let timeStr = ts;
+                try { timeStr = new Date(ts).toLocaleTimeString(); } catch {}
+
+                const sev = (a.severity || "info")
+                    .replace("Critique", "CRITICAL")
+                    .replace("Élevé",   "HIGH")
+                    .replace("Moyen",   "MEDIUM")
+                    .replace("Faible",  "INFO")
+                    .toUpperCase();
+
+                return {
+                    id:          String(a.id),
+                    timestamp:   timeStr,
+                    sourceIp:    a.src_ip   || a.source || "0.0.0.0",
+                    geo:         a.country  || "Unknown",
+                    eventType:   a.type     || a.category || "Unknown",
+                    severity:    sev,
+                    status:      a.status   || "active",
+                    description: a.message  || a.title   || "",
+                };
+            });
+            setLiveEvents(mapped);
+            setError(null);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
         }
-    }, [autoRefresh, isLive]);
+    }, []);
+
+    useEffect(() => {
+        fetchStats();
+        const interval = setInterval(fetchStats, 15000);
+        
+        // SSE for real-time
+        const sse = new EventSource(`${API}/api/telemetry/stream?channels=events`);
+        sse.addEventListener('events', (e: any) => {
+            try {
+                const data = JSON.parse(e.data);
+                const ts = data.created_at || data.timestamp || new Date().toISOString();
+                let timeStr = ts;
+                try { timeStr = new Date(ts).toLocaleTimeString(); } catch {}
+
+                const sev = (data.severity || "info")
+                    .replace("Critique", "CRITICAL")
+                    .replace("Élevé",   "HIGH")
+                    .replace("Moyen",   "MEDIUM")
+                    .replace("Faible",  "INFO")
+                    .toUpperCase();
+
+                const newEvt: ThreatEvent = {
+                    id:          String(data.id || Date.now()),
+                    timestamp:   timeStr,
+                    sourceIp:    data.src_ip   || data.source || "0.0.0.0",
+                    geo:         data.country  || "Unknown",
+                    eventType:   data.type     || data.event_type || "Unknown",
+                    severity:    sev,
+                    status:      data.status   || "active",
+                    description: data.message  || "",
+                };
+
+                // Notify for HIGH and CRITICAL events
+                if (sev === 'HIGH' || sev === 'CRITICAL') {
+                    notify({
+                        id: newEvt.id,
+                        type: newEvt.eventType,
+                        severity: sev as 'HIGH' | 'CRITICAL',
+                        message: newEvt.description || `${newEvt.eventType} detected`,
+                        src_ip: newEvt.sourceIp,
+                        country: newEvt.geo,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
+                setLiveEvents(prev => [newEvt, ...prev.slice(0, 49)]);
+            } catch {}
+        });
+        sse.onerror = () => { /* silently ignore SSE errors */ };
+
+        return () => {
+            clearInterval(interval);
+            sse.close();
+        };
+    }, [fetchStats]);
+
+    const filteredEvents = liveEvents.filter(e => 
+      e.sourceIp.includes(searchQuery) || e.eventType.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    if (loading && !stats) return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#050505] text-white">
+        <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
+        <p className="text-[10px] font-black uppercase tracking-[0.5em]">Tapping Global Threat Stream...</p>
+      </div>
+    );
 
     return (
-        <div className="p-6 space-y-6 max-w-[1920px] mx-auto animate-in fade-in duration-700 overflow-x-hidden">
-            {/* Header */}
-            <header className="space-y-6">
-                {/* Top Bar */}
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="p-8 space-y-8 bg-[#050505] min-h-screen text-white font-sans overflow-x-hidden">
+            
+            {/* Header Area */}
+            <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                <div className="flex items-center gap-6">
+                    <div className="relative">
+                        <div className="h-14 w-14 rounded-2xl bg-purple-600/10 border border-purple-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.2)]">
+                            <Globe className="h-7 w-7 text-purple-400 animate-pulse" />
+                        </div>
+                        <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-4 border-[#050505] animate-ping" />
+                    </div>
                     <div>
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="relative">
-                                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border border-purple-500/30 flex items-center justify-center">
-                                    <Globe className="h-6 w-6 text-purple-400 animate-pulse" />
-                                </div>
-                                {isLive && (
-                                    <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 animate-pulse border-2 border-background" />
-                                )}
-                            </div>
-                            <div>
-                                <h1 className="text-4xl font-black text-white tracking-tighter leading-none">
-                                    Live Threat <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">Sphere</span>
-                                </h1>
-                                <p className="text-xs text-slate-500 font-bold tracking-wide mt-1">Global Signal Interception</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        {/* Latency Indicator */}
-                        <div className="px-6 py-3 rounded-xl bg-slate-900/60 border border-white/5 backdrop-blur-xl">
-                            <div className="flex items-center gap-3">
-                                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <div>
-                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Latency</p>
-                                    <p className="text-lg font-black text-white font-mono">{latency}ms</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Status Badge */}
-                        <div className="px-6 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                            <div className="flex items-center gap-2">
-                                <Radio className="h-4 w-4 text-emerald-400 animate-pulse" />
-                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
-                                    {isLive ? 'LIVE STREAM :: ACTIVE' : 'PAUSED'}
-                                </span>
-                            </div>
-                        </div>
+                        <h1 className="text-4xl font-black text-white uppercase tracking-tighter italic">
+                          Threat <span className="text-purple-500">Sphere</span>.
+                        </h1>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1 italic">Real-time Global Interception Gateway</p>
                     </div>
                 </div>
 
-                {/* Global Info Bar */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="glass-card p-4 hover:scale-[1.02] transition-transform">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Global Threat Intelligence</p>
-                        <p className="text-xs text-slate-400 font-semibold">REAL-TIME STREAM :: LIVE</p>
-                    </div>
-                    <div className="glass-card p-4">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Events</p>
-                        <p className="text-2xl font-black text-white font-mono">{totalEvents}</p>
-                    </div>
-                    <div className="glass-card p-4">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Critical Nodes</p>
-                        <p className="text-2xl font-black text-orange-500 font-mono">{criticalNodes}</p>
-                    </div>
-                    <div className="glass-card p-4">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Operational Base</p>
-                        <p className="text-sm font-black text-white">Paris SOC</p>
-                    </div>
-                </div>
-
-                {/* Time Range Selector */}
-                <div className="flex items-center gap-2 bg-slate-900/40 p-1.5 rounded-xl border border-white/5 backdrop-blur-md w-fit">
-                    {['5m', '15m', '1h', '6h'].map((range) => (
-                        <button
-                            key={range}
-                            onClick={() => setTimeRange(range)}
-                            className={cn(
-                                "px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-                                timeRange === range
-                                    ? "bg-purple-500 text-white shadow-lg shadow-purple-500/30"
-                                    : "text-slate-500 hover:text-white"
-                            )}
-                        >
-                            {range}
-                        </button>
-                    ))}
+                <div className="flex items-center gap-4">
+                   <div className="bg-white/[0.02] border border-white/5 px-6 py-3 rounded-2xl flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Neural Link</p>
+                        <p className="text-xs font-black text-emerald-400">STABLE (14ms)</p>
+                      </div>
+                      <div className="w-px h-8 bg-white/10" />
+                      <div className="text-right">
+                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">SLA Status</p>
+                        <p className="text-xs font-black text-white">99.99%</p>
+                      </div>
+                   </div>
+                   <button onClick={fetchStats} className="p-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all">
+                      <RefreshCw className="w-6 h-6 text-slate-400" />
+                   </button>
                 </div>
             </header>
 
-            {/* Main Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                {/* Left Column - Traffic Analysis */}
-                <div className="xl:col-span-3 space-y-6">
-                    {/* Network Volatility */}
-                    <div className="glass-card p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Network Volatility</h3>
-                            <Activity className="h-4 w-4 text-purple-400" />
-                        </div>
-                        <div className="space-y-3">
-                            <div>
-                                <div className="flex justify-between mb-2">
-                                    <span className="text-[9px] text-slate-500 font-bold">Traffic Flow Analysis</span>
-                                    <span className="text-[9px] text-slate-500 font-mono">LIVE</span>
-                                </div>
-                                <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden">
-                                    <motion.div
-                                        className="h-full bg-gradient-to-r from-purple-500 to-cyan-500"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: '0%' }}
-                                        transition={{ duration: 2, repeat: Infinity }}
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex justify-between items-end">
-                                <span className="text-[10px] text-slate-600 font-bold">Total Flux</span>
-                                <div className="flex items-center gap-1">
-                                    <ArrowUp className="h-3 w-3 text-emerald-400" />
-                                    <span className="text-sm font-black text-emerald-400">+12.4%</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Protocol Metrics */}
-                    <div className="glass-card p-6 space-y-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Multi-source Monitoring</h3>
-                            <div className="flex items-center gap-1">
-                                <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                <span className="text-[8px] text-slate-500 font-black uppercase">LIVE</span>
-                            </div>
-                        </div>
-                        <div className="space-y-3">
-                            {protocolMetrics.map((metric, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/40 border border-white/5 hover:border-purple-500/20 transition-colors group">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn(
-                                            "h-2 w-2 rounded-full",
-                                            metric.risk === 'low' ? 'bg-slate-600' : metric.risk === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
-                                        )} />
-                                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-wide group-hover:text-white transition-colors">
-                                            {metric.label}
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-black text-white font-mono">{metric.value} <span className="text-[10px] text-slate-600">{metric.unit}</span></span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Threat Types */}
-                    <div className="glass-card p-6 space-y-4">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Data Flow</h3>
-                        <div className="space-y-3">
-                            {threatMetrics.map((metric, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/40 border border-white/5 hover:border-red-500/20 transition-colors group">
-                                    <div className="flex items-center gap-3">
-                                        <AlertTriangle className="h-3.5 w-3.5 text-slate-600 group-hover:text-red-400 transition-colors" />
-                                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-wide group-hover:text-white transition-colors">
-                                            {metric.label}
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm font-black text-white font-mono">{metric.value} <span className="text-[10px] text-slate-600">{metric.unit}</span></span>
-                                        <p className="text-[8px] text-slate-600 font-bold uppercase mt-0.5">{metric.risk}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Center Column - Stats & Analytics */}
-                <div className="xl:col-span-6 space-y-6">
-                    {/* Key Metrics Grid */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="glass-card p-5 hover:scale-[1.02] transition-transform">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Événements Total</p>
-                            <p className="text-3xl font-black text-white font-mono mb-1">{stats.totalEvents}</p>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs text-emerald-400 font-bold">+0%</span>
-                            </div>
-                        </div>
-                        <div className="glass-card p-5 hover:scale-[1.02] transition-transform">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Alertes Critiques</p>
-                            <p className="text-3xl font-black text-red-400 font-mono mb-1">{stats.criticalAlerts}</p>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-600 font-bold">+0%</span>
-                            </div>
-                        </div>
-                        <div className="glass-card p-5 hover:scale-[1.02] transition-transform">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Attaques Bloquées</p>
-                            <p className="text-3xl font-black text-orange-400 font-mono mb-1">{stats.blockedAttacks}</p>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-600 font-bold">+0%</span>
-                            </div>
-                        </div>
-                        <div className="glass-card p-5 hover:scale-[1.02] transition-transform">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Menaces Actives</p>
-                            <p className="text-3xl font-black text-yellow-400 font-mono mb-1">{stats.activeThreats}</p>
-                            <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-600 font-bold">+0%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Performance Metrics */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="glass-card p-5">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">MTTR</p>
-                            <p className="text-2xl font-black text-white font-mono mb-1">{stats.mttr}</p>
-                            <p className="text-[8px] text-slate-600 font-bold uppercase">Temps résolution</p>
-                        </div>
-                        <div className="glass-card p-5">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">MTTD</p>
-                            <p className="text-2xl font-black text-white font-mono mb-1">{stats.mttd}</p>
-                            <p className="text-[8px] text-slate-600 font-bold uppercase">Temps détection</p>
-                        </div>
-                        <div className="glass-card p-5">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Uptime</p>
-                            <p className="text-2xl font-black text-white font-mono mb-1">{stats.uptime}</p>
-                            <p className="text-[8px] text-slate-600 font-bold uppercase">Disponibilité</p>
-                        </div>
-                        <div className="glass-card p-5">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Surveill.</p>
-                            <p className="text-2xl font-black text-emerald-400 font-mono mb-1">{stats.coverage}</p>
-                            <p className="text-[8px] text-slate-600 font-bold uppercase">Couverture</p>
-                        </div>
-                    </div>
-
-                    {/* Severity Distribution Chart */}
-                    <div className="glass-card p-6">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Répartition par Sévérité</h3>
-                        <div className="grid grid-cols-4 gap-4">
-                            <div className="text-center p-4 rounded-xl bg-red-500/5 border border-red-500/20">
-                                <div className="h-20 w-20 mx-auto rounded-full bg-red-500/10 border-4 border-red-500/30 flex items-center justify-center mb-3">
-                                    <span className="text-2xl font-black text-red-400 font-mono">{severityDistribution.critique}</span>
-                                </div>
-                                <p className="text-[9px] font-black text-red-400 uppercase tracking-widest">Critique</p>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
-                                <div className="h-20 w-20 mx-auto rounded-full bg-orange-500/10 border-4 border-orange-500/30 flex items-center justify-center mb-3">
-                                    <span className="text-2xl font-black text-orange-400 font-mono">{severityDistribution.élevé}</span>
-                                </div>
-                                <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest">Élevé</p>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
-                                <div className="h-20 w-20 mx-auto rounded-full bg-yellow-500/10 border-4 border-yellow-500/30 flex items-center justify-center mb-3">
-                                    <span className="text-2xl font-black text-yellow-400 font-mono">{severityDistribution.moyen}</span>
-                                </div>
-                                <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest">Moyen</p>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
-                                <div className="h-20 w-20 mx-auto rounded-full bg-cyan-500/10 border-4 border-cyan-500/30 flex items-center justify-center mb-3">
-                                    <span className="text-2xl font-black text-cyan-400 font-mono">{severityDistribution.nouveau}</span>
-                                </div>
-                                <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Nouveau</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Live Traffic Logs */}
-                    <div className="glass-card p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <div>
-                                <h3 className="text-[11px] font-black text-white uppercase tracking-widest">Live Traffic Logs</h3>
-                                <p className="text-[9px] text-slate-500 font-bold mt-1">FULL LOGS</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-slate-600" />
-                                <span className="text-[9px] text-slate-600 font-black uppercase">No signals archived</span>
-                            </div>
-                        </div>
-                        <div className="h-32 rounded-xl bg-slate-950/40 border border-white/5 flex items-center justify-center">
-                            <div className="text-center opacity-30">
-                                <Terminal className="h-10 w-10 mx-auto mb-3 text-slate-600" />
-                                <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Awaiting Signal Stream</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Column - Internal Traffic */}
-                <div className="xl:col-span-3 space-y-6">
-                    {/* Internal Traffic Monitor */}
-                    <div className="glass-card p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Internal Traffic Monitor</h3>
-                            <div className="flex items-center gap-1">
-                                <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                                <span className="text-[8px] text-slate-500 font-black uppercase">LIVE</span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5">
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Total Requests</span>
-                                    <span className="text-sm font-black text-white font-mono">0</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Minus className="h-3 w-3 text-slate-600" />
-                                    <span className="text-[10px] text-slate-600 font-bold">+0% vs last period</span>
-                                </div>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <CheckCircle className="h-4 w-4 text-slate-600" />
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Health</span>
-                                </div>
-                                <p className="text-xs text-slate-600 font-bold">N/A</p>
-                                <p className="text-[10px] text-slate-700 mt-2">No internal traffic data yet.</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Network className="h-4 w-4 text-slate-600" />
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Active Connections</span>
-                                </div>
-                                <p className="text-2xl font-black text-white font-mono">0</p>
-                            </div>
-
-                            <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                                <div className="flex items-center gap-2">
-                                    <RefreshCw className="h-3.5 w-3.5 text-emerald-400 animate-spin" />
-                                    <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Auto-refresh enabled</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Detection Database */}
-                    <div className="glass-card p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detection Database</h3>
-                            <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">ALL RECORDS</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="p-4 rounded-xl bg-slate-950/40 border border-white/5">
-                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Historique des Événements</p>
-                                <p className="text-xs text-slate-600 font-bold">Real-time Security Events • 0 au total</p>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20 text-center">
-                                    <p className="text-[8px] text-red-400 font-black uppercase mb-1">Critique:</p>
-                                    <p className="text-lg font-black text-red-400 font-mono">0</p>
-                                </div>
-                                <div className="p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 text-center">
-                                    <p className="text-[8px] text-orange-400 font-black uppercase mb-1">Élevé:</p>
-                                    <p className="text-lg font-black text-orange-400 font-mono">0</p>
-                                </div>
-                                <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20 text-center">
-                                    <p className="text-[8px] text-cyan-400 font-black uppercase mb-1">Nouveau:</p>
-                                    <p className="text-lg font-black text-cyan-400 font-mono">0</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {/* Tactical Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+               <TacticalCard label="Signals Processed" value={stats?.counters.events.toLocaleString() || '0'} icon={Zap} color="text-cyan-400" />
+               <TacticalCard label="Verified Alerts" value={stats?.counters.alerts.toLocaleString() || '0'} icon={Bell} color="text-purple-400" />
+               <TacticalCard label="Escalated Cases" value={stats?.counters.incidents.toLocaleString() || '0'} icon={Shield} color="text-red-500" />
+               <TacticalCard label="Nodes Online" value={`${stats?.health?.online ?? stats?.health?.active_nodes ?? 0}/${stats?.health?.total ?? stats?.health?.active_nodes ?? 0}`} icon={Server} color="text-emerald-400" />
             </div>
 
-            {/* Event Logs Table */}
-            <div className="glass-card p-2">
-                <div className="p-6 border-b border-white/5 bg-slate-950/20">
-                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-12 gap-8">
+               
+               {/* Left Column: Severity Distribution */}
+               <div className="col-span-3 space-y-8">
+                  <div className="bg-[#0D121B] border border-white/5 rounded-[32px] p-8 shadow-2xl">
+                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8 italic">Severity Volatility</h3>
+                     <div className="space-y-6">
+                        {['CRITICAL', 'HIGH', 'MEDIUM', 'INFO'].map(sev => {
+                          const count = stats?.severity[sev.toLowerCase()] || 0;
+                          const max = Math.max(...Object.values(stats?.severity || {})) || 1;
+                          return (
+                            <div key={sev} className="space-y-2">
+                               <div className="flex justify-between items-center">
+                                  <span className={cn("text-[9px] font-black uppercase tracking-widest", {
+                                    'text-red-500': sev === 'CRITICAL',
+                                    'text-orange-500': sev === 'HIGH',
+                                    'text-yellow-400': sev === 'MEDIUM',
+                                    'text-blue-400': sev === 'INFO'
+                                  })}>{sev}</span>
+                                  <span className="text-xs font-black text-white italic">{count}</span>
+                               </div>
+                               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(count/max)*100}%` }}
+                                    className={cn("h-full", {
+                                      'bg-red-600': sev === 'CRITICAL',
+                                      'bg-orange-600': sev === 'HIGH',
+                                      'bg-yellow-500': sev === 'MEDIUM',
+                                      'bg-blue-600': sev === 'INFO'
+                                    })} 
+                                  />
+                               </div>
+                            </div>
+                          );
+                        })}
+                     </div>
+                  </div>
+
+                  <div className="bg-[#0D121B] border border-white/5 rounded-[32px] p-8 shadow-2xl relative overflow-hidden">
+                     <div className="absolute top-0 right-0 p-4 opacity-5"><Activity className="w-24 h-24" /></div>
+                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6 italic">Neural Heuristics</h3>
+                     <div className="space-y-4">
+                        <div className="p-4 rounded-2xl bg-black/40 border border-white/5">
+                           <p className="text-[8px] font-black text-slate-600 uppercase mb-2">Detection Rate</p>
+                           <p className="text-xl font-black text-emerald-400 italic">98.2% <span className="text-[8px] text-slate-600 ml-1">UP 0.4%</span></p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-black/40 border border-white/5">
+                           <p className="text-[8px] font-black text-slate-600 uppercase mb-2">False Positives</p>
+                           <p className="text-xl font-black text-blue-400 italic">0.03% <span className="text-[8px] text-slate-600 ml-1">DOWN 12%</span></p>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+
+               {/* Center Column: Live Logs */}
+               <div className="col-span-6 bg-[#0D121B] border border-white/5 rounded-[32px] overflow-hidden flex flex-col shadow-2xl">
+                  <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
+                     <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-purple-600/10 flex items-center justify-center border border-purple-500/20 text-purple-400"><Terminal className="w-5 h-5" /></div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase tracking-widest mb-1">Historique des Événements</h2>
-                            <p className="text-[10px] text-slate-500 font-bold">Real-time Security Events • 0 au total</p>
+                           <h3 className="text-[11px] font-black text-white uppercase tracking-widest italic">Tactical Intercept Log</h3>
+                           <p className="text-[8px] font-black text-slate-600 uppercase mt-1 tracking-widest">Popping 50/1000 buffer</p>
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            {/* Time filters */}
-                            <div className="flex gap-1 bg-slate-900/40 p-1 rounded-lg">
-                                {['15m', '1h', '6h', '24h', '7d', '30d'].map((t) => (
-                                    <button
-                                        key={t}
-                                        className="px-3 py-1.5 text-[9px] font-black text-slate-500 hover:text-white uppercase tracking-wider rounded transition-colors hover:bg-white/5"
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Search */}
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600" />
-                                <input
-                                    type="text"
-                                    placeholder="Rechercher IP, Service, Type..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 pr-4 py-2 bg-slate-950 border border-white/5 rounded-lg text-[10px] font-bold text-white placeholder:text-slate-700 uppercase tracking-wide focus:outline-none focus:border-purple-500/30 w-64"
-                                />
-                            </div>
-
-                            {/* Filters */}
-                            <select
-                                value={selectedSeverity}
-                                onChange={(e) => setSelectedSeverity(e.target.value)}
-                                className="px-4 py-2 bg-slate-950 border border-white/5 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-wide focus:outline-none focus:border-purple-500/30"
-                            >
-                                <option>Toutes Sévérités</option>
-                                <option>CRITIQUE</option>
-                                <option>ÉLEVÉ</option>
-                                <option>MOYEN</option>
-                                <option>NOUVEAU</option>
-                            </select>
-
-                            <select
-                                value={selectedStatus}
-                                onChange={(e) => setSelectedStatus(e.target.value)}
-                                className="px-4 py-2 bg-slate-950 border border-white/5 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-wide focus:outline-none focus:border-purple-500/30"
-                            >
-                                <option>Tous Statuts</option>
-                                <option>Actif</option>
-                                <option>Résolu</option>
-                                <option>En cours</option>
-                            </select>
-
-                            <button className="px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg text-[10px] font-black text-purple-400 uppercase tracking-wider hover:bg-purple-500/20 transition-colors flex items-center gap-2">
-                                <Download className="h-3.5 w-3.5" />
-                                Export CSV
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-950/40 border-b border-white/5">
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">ID</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Heure</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">IP Source</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">IP Dest</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Geo</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Service</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Type d'Événement</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Sévérité</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Statut</th>
-                                <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
+                     </div>
+                     <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
+                        <input 
+                           type="text" 
+                           placeholder="FILTER_IP_OR_EVENT..."
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                           className="bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-[10px] font-bold text-white w-64 focus:outline-none focus:border-purple-500/40 transition-all uppercase placeholder:text-slate-700"
+                        />
+                     </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+                     <table className="w-full text-left">
+                        <thead className="bg-black/40 border-b border-white/5 sticky top-0 z-10">
+                           <tr className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                              <th className="px-8 py-4">Time</th>
+                              <th className="px-8 py-4">Origin</th>
+                              <th className="px-8 py-4">Vector</th>
+                              <th className="px-8 py-4">Severity</th>
+                           </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td colSpan={10} className="py-32 text-center">
-                                    <div className="flex flex-col items-center opacity-20">
-                                        <FileText className="h-16 w-16 mb-4 text-slate-600" />
-                                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">Affichage 0 sur 0 événements</p>
-                                        <p className="text-[9px] text-slate-700 font-bold mt-2">Auto-refresh actif</p>
-                                    </div>
-                                </td>
-                            </tr>
+                        <tbody className="divide-y divide-white/[0.03]">
+                           <AnimatePresence initial={false}>
+                              {filteredEvents.map((evt) => (
+                                 <motion.tr 
+                                    key={evt.id}
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="hover:bg-white/[0.02] transition-colors cursor-default"
+                                 >
+                                    <td className="px-8 py-5 text-[10px] font-mono text-slate-500">{evt.timestamp}</td>
+                                    <td className="px-8 py-5">
+                                       <div className="flex flex-col">
+                                          <span className="text-[11px] font-black text-white font-mono">{evt.sourceIp}</span>
+                                          <span className="text-[8px] font-black text-slate-600 uppercase">{evt.geo}</span>
+                                       </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-[10px] font-black text-purple-400 italic truncate max-w-[200px]">{evt.eventType}</td>
+                                    <td className="px-8 py-5">
+                                       <span className={cn("px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border", {
+                                          'bg-red-500/10 text-red-500 border-red-500/20': evt.severity === 'CRITICAL',
+                                          'bg-orange-500/10 text-orange-500 border-orange-500/20': evt.severity === 'HIGH',
+                                          'bg-yellow-500/10 text-yellow-400 border-yellow-500/20': evt.severity === 'MEDIUM',
+                                          'bg-blue-500/10 text-blue-400 border-blue-500/20': evt.severity === 'INFO'
+                                       })}>{evt.severity}</span>
+                                    </td>
+                                 </motion.tr>
+                              ))}
+                           </AnimatePresence>
                         </tbody>
-                    </table>
-                </div>
+                     </table>
+                  </div>
+               </div>
+
+               {/* Right Column: Globe & Health */}
+               <div className="col-span-3 space-y-8">
+                  <div className="bg-[#0D121B] border border-white/5 rounded-[32px] p-8 shadow-2xl relative overflow-hidden h-[400px] flex flex-col">
+                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6 italic relative z-10">Live Infiltration Map</h3>
+                     <div className="flex-1 relative z-10">
+                        <div className="absolute inset-0 opacity-20"><WorldMapSVG /></div>
+                        {liveEvents.slice(0, 3).map((e, i) => (
+                           <div 
+                            key={e.id} 
+                            className="absolute w-3 h-3 bg-red-600 rounded-full animate-ping"
+                            style={{ top: `${30 + i * 20}%`, left: `${20 + i * 25}%` }}
+                           />
+                        ))}
+                     </div>
+                     <div className="mt-auto relative z-10 pt-6 border-t border-white/5">
+                        <div className="flex justify-between items-center">
+                           <p className="text-[9px] font-black text-slate-500 uppercase">Top Source</p>
+                           <p className="text-[11px] font-black text-white italic">United States (42%)</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="bg-[#0D121B] border border-white/5 rounded-[32px] p-8 shadow-2xl">
+                     <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-6 italic">Sensor Health Cluster</h3>
+                     <div className="grid grid-cols-2 gap-4">
+                        <HealthItem label="Endpoint Sensors" value={String(stats?.health?.online ?? stats?.health?.active_nodes ?? 0)} status="online" />
+                        <HealthItem label="Network Nodes" value="12" status="online" />
+                        <HealthItem label="AI Core" value="Sync" status="online" />
+                        <HealthItem label="Cloud Uplinks" value={String(stats?.health?.offline ?? 0)} status={stats?.health?.offline ? "offline" : "online"} />
+                     </div>
+                  </div>
+               </div>
+
             </div>
+
         </div>
     );
+}
+
+function TacticalCard({ label, value, icon: Icon, color }: any) {
+   return (
+      <div className="bg-[#0D121B] border border-white/5 p-8 rounded-[32px] flex items-center gap-6 shadow-xl group hover:border-white/10 transition-all">
+         <div className={cn("w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10", color)}>
+            <Icon className="w-7 h-7" />
+         </div>
+         <div>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-3xl font-black text-white italic tracking-tighter">{value}</p>
+         </div>
+      </div>
+   );
+}
+
+function DetailItem({ label, value, color }: any) {
+  return (
+    <div className="flex justify-between items-center">
+      <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{label}</span>
+      <span className={cn("text-[10px] font-black uppercase italic", color)}>{value}</span>
+    </div>
+  );
+}
+
+function HealthItem({ label, value, status }: any) {
+  return (
+    <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+       <div className="flex justify-between items-center mb-2">
+          <div className={cn("w-1.5 h-1.5 rounded-full", status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]')} />
+          <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{status}</span>
+       </div>
+       <p className="text-[10px] font-black text-white italic truncate mb-0.5">{label}</p>
+       <p className="text-sm font-black text-slate-400">{value}</p>
+    </div>
+  );
+}
+
+function WorldMapSVG() {
+  return (
+    <svg viewBox="0 0 800 400" className="w-full h-full fill-slate-800">
+      <path d="M150,100 Q180,80 200,100 T250,120 T300,100 T350,150 T400,130 T450,160 T500,120 T550,140 T600,100 T650,130 T700,110" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="200" cy="150" r="1.5" />
+      <circle cx="450" cy="180" r="1.5" />
+      <circle cx="600" cy="250" r="1.5" />
+      <circle cx="300" cy="280" r="1.5" />
+      <circle cx="100" cy="200" r="1.5" />
+    </svg>
+  );
+}
+
+function cn(...classes: any[]) {
+  return classes.filter(Boolean).join(" ");
 }

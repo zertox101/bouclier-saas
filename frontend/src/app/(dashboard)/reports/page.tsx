@@ -1,159 +1,180 @@
 "use client";
 
-import React, { useState } from 'react';
-import {
-    FileText,
-    Download,
-    Calendar,
-    Filter,
-    Shield,
-    BarChart3,
-    PieChart,
-    Share2,
-    Eye
-} from 'lucide-react';
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { FileText, Download, Filter, Clock, AlertTriangle, BarChart3, FileJson } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
 
-// Mock Data
-const reports = [
-    { id: 'RPT-2025-001', title: 'Monthly Security Executive Summary', type: 'Executive', date: '2025-05-01', status: 'Finalized', size: '2.4 MB' },
-    { id: 'RPT-2025-002', title: 'Incident Response Post-Mortem: #INC-442', type: 'Incident', date: '2025-04-28', status: 'Draft', size: '1.1 MB' },
-    { id: 'RPT-2025-003', title: 'Q1 Compliance Audit (ISO 27001)', type: 'Compliance', date: '2025-04-15', status: 'Finalized', size: '14.2 MB' },
-    { id: 'RPT-2025-004', title: 'Weekly Vulnerability Assessment', type: 'Technical', date: '2025-05-05', status: 'Generated', size: '4.8 MB' },
-    { id: 'RPT-2025-005', title: 'Threat Intelligence Landscape Update', type: 'Intelligence', date: '2025-05-06', status: 'Finalized', size: '3.2 MB' },
+const REPORT_TYPES = [
+  { id: "all", name: "All Reports" },
+  { id: "soc-executive", name: "SOC Executive" },
+  { id: "soc-daily", name: "SOC Daily" },
+  { id: "soc-weekly", name: "SOC Weekly" },
+  { id: "soc-monthly", name: "SOC Monthly" },
+  { id: "pentest-executive", name: "Pentest Executive" },
+  { id: "pentest-technical", name: "Pentest Technical" },
+  { id: "pentest-compliance", name: "Compliance" },
+  { id: "mythos-kill-chain", name: "Mythos Kill Chain" },
 ];
 
-const reportTypes = ['All', 'Executive', 'Incident', 'Compliance', 'Technical', 'Intelligence'];
+function ReportIcon({ type }: { type: string }) {
+  if (type.startsWith("soc")) return <BarChart3 className="w-4 h-4 text-blue-400" />;
+  if (type.startsWith("pentest")) return <AlertTriangle className="w-4 h-4 text-red-400" />;
+  return <FileText className="w-4 h-4 text-purple-400" />;
+}
 
 export default function ReportsPage() {
-    const [selectedType, setSelectedType] = useState('All');
+  const [reports, setReports] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
 
-    const filteredReports = selectedType === 'All'
-        ? reports
-        : reports.filter(r => r.type === selectedType);
+  useEffect(() => {
+    Promise.all([
+      apiClient("/api/reports/history").catch(() => ({ reports: [] })),
+      apiClient("/api/reports/templates").catch(() => ({ templates: [] })),
+    ]).then(([h, t]) => {
+      setReports((h as any).reports || []);
+      setTemplates((t as any).templates || []);
+      setLoading(false);
+    });
+  }, []);
 
+  const filtered = reports.filter(r => {
+    if (filterType !== "all" && r.type !== filterType) return false;
+    if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    return true;
+  });
+
+  const generateReport = async (type: string) => {
+    setGenerating(type);
+    try {
+      const resp = await fetch(`http://localhost:8005/api/reports/generate/${type}`, { credentials: "include" });
+      const html = await resp.text();
+      setPreviewHtml(html);
+    } catch (e) {
+      alert("Failed to generate report");
+    }
+    setGenerating(null);
+  };
+
+  const exportJson = async (type: string) => {
+    try {
+      const data = await apiClient(`/api/reports/generate/${type}/json`);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `report-${type}-${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Failed to export JSON");
+    }
+  };
+
+  if (previewHtml) {
     return (
-        <div className="space-y-8 animate-fade-in relative z-10 pb-12">
-            {/* Header */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-8 pt-6">
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="h-10 w-10 rounded-xl bg-p-500/10 border border-p-500/20 flex items-center justify-center text-p-400 shadow-[0_0_15px_rgba(167,139,250,0.2)]">
-                            <BarChart3 className="h-5 w-5" />
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-text-3">Governance & Reporting</span>
-                    </div>
-                    <h1 className="text-display mb-1 text-white">
-                        Mission <span className="text-p-400">Reports</span>
-                    </h1>
-                    <p className="text-body text-text-3 font-medium uppercase tracking-widest max-w-xl">
-                        Centralized repository for operational intelligence and compliance artifacts.
-                    </p>
-                </div>
-
-                <div className="flex flex-col items-end gap-4 w-full lg:w-auto">
-                    <button className="h-12 px-6 rounded-xl bg-bg-2/50 border border-border-1 flex items-center gap-3 text-text-2 hover:text-white hover:border-text-2 hover:bg-bg-3 transition-all group">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Generate New Report</span>
-                        <FileText className="h-4 w-4" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Filters */}
-            <div className="glass-panel p-2 rounded-xl flex overflow-x-auto gap-2 no-scrollbar">
-                {reportTypes.map((type) => (
-                    <button
-                        key={type}
-                        onClick={() => setSelectedType(type)}
-                        className={cn(
-                            "px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap border border-transparent",
-                            selectedType === type
-                                ? "bg-white text-black shadow-lg"
-                                : "text-text-3 hover:text-white hover:bg-white/5"
-                        )}
-                    >
-                        {type}
-                    </button>
-                ))}
-            </div>
-
-            {/* Reports List */}
-            <div className="glass-card rounded-2xl overflow-hidden border border-border-1 relative">
-                <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-bg-0/50" />
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-bg-1/50 border-b border-border-1">
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Reference ID</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Report Title</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Type</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Generated Date</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Size</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em]">Status</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-[0.2em] text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border-1/50">
-                            {filteredReports.map((report) => (
-                                <motion.tr
-                                    key={report.id}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="group hover:bg-p-600/5 transition-all cursor-pointer"
-                                >
-                                    <td className="px-8 py-5 whitespace-nowrap">
-                                        <span className="text-[10px] font-mono text-text-3/60">{report.id}</span>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className="text-xs font-bold text-white tracking-tight group-hover:text-p-400 transition-colors flex items-center gap-2">
-                                            <FileText className="h-3.5 w-3.5 opacity-50" />
-                                            {report.title}
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className="text-[9px] font-black text-text-2 uppercase tracking-tight">{report.type}</span>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <div className="text-[10px] font-mono text-text-3/60">{report.date}</div>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className="text-[10px] font-mono text-text-3/60">{report.size}</span>
-                                    </td>
-                                    <td className="px-8 py-5">
-                                        <span className={cn(
-                                            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
-                                            report.status === 'Finalized' ? "text-success border-success/20 bg-success/10" :
-                                                report.status === 'Draft' ? "text-warning border-warning/20 bg-warning/10" :
-                                                    "text-info border-info/20 bg-info/10"
-                                        )}>
-                                            <div className={cn("h-1 w-1 rounded-full",
-                                                report.status === 'Finalized' ? "bg-success" :
-                                                    report.status === 'Draft' ? "bg-warning" : "bg-info"
-                                            )} />
-                                            {report.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-5 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                                            <button className="h-8 w-8 rounded-lg bg-bg-2 border border-border-1 flex items-center justify-center text-text-3 hover:text-white hover:border-p-400 hover:bg-p-600/20 transition-all">
-                                                <Eye className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button className="h-8 w-8 rounded-lg bg-bg-2 border border-border-1 flex items-center justify-center text-text-3 hover:text-white hover:border-p-400 hover:bg-p-600/20 transition-all">
-                                                <Download className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button className="h-8 w-8 rounded-lg bg-bg-2 border border-border-1 flex items-center justify-center text-text-3 hover:text-white hover:border-p-400 hover:bg-p-600/20 transition-all">
-                                                <Share2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </motion.tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+      <div className="space-y-4 p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-white">Report Preview</h1>
+          <button onClick={() => setPreviewHtml(null)} className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm hover:bg-slate-600">Back</button>
         </div>
+        <iframe srcDoc={previewHtml} className="w-full h-[calc(100vh-120px)] bg-white rounded-lg" />
+      </div>
     );
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <div className="flex items-center gap-4">
+        <FileText className="w-6 h-6 text-purple-400" />
+        <h1 className="text-2xl font-bold text-white">Advanced Reports</h1>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <Filter className="w-4 h-4 text-slate-400" />
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+          {REPORT_TYPES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+          <option value="all">All Status</option>
+          <option value="final">Final</option>
+          <option value="draft">Draft</option>
+          <option value="review">Review</option>
+        </select>
+      </div>
+
+      {templates.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-slate-300 mb-3">Generate Report</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {templates.map((t: any) => (
+              <motion.button key={t.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={() => generateReport(t.id)} disabled={generating === t.id}
+                className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-left hover:border-purple-500/40 transition-all disabled:opacity-50">
+                <div className="flex items-center gap-2">
+                  <ReportIcon type={t.id} />
+                  <span className="text-sm font-medium text-white">{t.name}</span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{t.description}</p>
+                <div className="flex gap-2 mt-2">
+                  <span className="text-[10px] text-purple-400 flex items-center gap-1">
+                    {generating === t.id ? "Generating..." : "HTML"}
+                  </span>
+                  <button onClick={(e) => { e.stopPropagation(); exportJson(t.id); }}
+                    className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1">
+                    <FileJson className="w-3 h-3" /> JSON
+                  </button>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-sm font-semibold text-slate-300 mb-3">Report History ({filtered.length})</h2>
+        <div className="grid gap-2">
+          {filtered.map((r, i) => (
+            <motion.div key={r.id || i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+              className="bg-slate-900/50 border border-slate-800 rounded-lg p-4 hover:border-purple-500/30 transition-all">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <ReportIcon type={r.type} />
+                    <h3 className="text-sm font-bold text-white">{r.title}</h3>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${r.status === "final" ? "bg-green-500/10 text-green-400 border-green-500/20" : r.status === "draft" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"}`}>{r.status}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-400">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(r.created_at).toLocaleDateString()}</span>
+                    <span>{r.data_range || "24h"}</span>
+                    <span>{r.findings_count || 0} findings</span>
+                    <span className={`${(r.risk_score || 0) > 60 ? "text-red-400" : (r.risk_score || 0) > 30 ? "text-amber-400" : "text-green-400"}`}>Risk: {r.risk_score || "?"}/100</span>
+                    <span className="text-slate-500">{r.generated_by || "System"}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => generateReport(r.type)}
+                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all" title="View report">
+                    <FileText className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => exportJson(r.type)}
+                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all" title="Download JSON">
+                    <Download className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+          {!loading && filtered.length === 0 && (
+            <p className="text-xs text-slate-500 text-center py-8">No reports match your filters</p>
+          )}
+          {loading && <p className="text-xs text-slate-500 text-center py-8">Loading reports...</p>}
+        </div>
+      </div>
+    </div>
+  );
 }

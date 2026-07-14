@@ -11,10 +11,7 @@ from app.models.academy_sql import (
     AcademyEvent, AcademyAuditEvent, AcademyWriteup
 )
 from app.models.sql import User
-# Mocking current user for now as we don't have the full auth flow exposed in context
-# In real prod, this comes from auth dependency
-def get_current_user_id():
-    return 1 # Default Admin
+from app.routes.auth import get_current_user
 
 router = APIRouter(prefix="/academy", tags=["Academy"])
 
@@ -47,8 +44,8 @@ def get_labs(category: Optional[str] = None, db: Session = Depends(get_db)):
     return query.all()
 
 @router.post("/labs/{lab_id}/start")
-def start_lab(lab_id: int, req: LabStartRequest, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def start_lab(lab_id: int, req: LabStartRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
     
     lab = db.query(AcademyLab).filter(AcademyLab.id == lab_id).first()
     if not lab:
@@ -56,7 +53,7 @@ def start_lab(lab_id: int, req: LabStartRequest, db: Session = Depends(get_db)):
 
     # Create Session
     session = AcademyLabSession(
-        org_id="default", # Multi-tenant placeholder
+        org_id=current_user.org_id,
         lab_id=lab_id,
         cohort_id=req.cohort_id,
         user_id=user_id,
@@ -66,7 +63,7 @@ def start_lab(lab_id: int, req: LabStartRequest, db: Session = Depends(get_db)):
     
     # Audit
     audit = AcademyAuditEvent(
-        org_id="default", user_id=user_id, action="LAB_START",
+        org_id=current_user.org_id, user_id=user_id, action="LAB_START",
         entity_type="lab", entity_id=str(lab_id), metadata_json={}
     )
     db.add(audit)
@@ -131,13 +128,13 @@ async def stream_telemetry(lab_session_id: int, db: Session = Depends(get_db)):
     return {"msg": "Connect to /api/events/stream filtered by session_id via frontend"}
 
 @router.post("/writeups/{session_id}")
-def update_writeup(session_id: int, update: WriteupUpdate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def update_writeup(session_id: int, update: WriteupUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
     
     writeup = db.query(AcademyWriteup).filter(AcademyWriteup.lab_session_id == session_id).first()
     if not writeup:
         writeup = AcademyWriteup(
-            org_id="default", lab_session_id=session_id, user_id=user_id,
+            org_id=current_user.org_id, lab_session_id=session_id, user_id=user_id,
             markdown=update.markdown
         )
         db.add(writeup)

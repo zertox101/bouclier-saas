@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.sql import CorrelatedAlert, MlAlert
+from app.models.sql import CorrelatedAlert, MlAlert, Incident
 from app.services.prompt_guard import is_prompt_injection
 from app.services.rag import rag_service
 from app.services.redaction import redact_text
@@ -244,3 +244,85 @@ def explain_alert(
         "recommended_actions": result["recommended_actions"],
         "citations": result["citations"],
     }
+@public_router.post("/alerts/{alert_id}/archive")
+def archive_alert(
+    alert_id: str,
+    db: Session = Depends(require_db),
+):
+    alert_type = "correlation" if alert_id.startswith("corr-") else "ml" if alert_id.startswith("ml-") else None
+    numeric_id = alert_id.replace("corr-", "").replace("ml-", "")
+    
+    if not numeric_id.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid Alert ID")
+    
+    alert_id_int = int(numeric_id)
+    if alert_type == "correlation":
+        alert = db.query(CorrelatedAlert).filter(CorrelatedAlert.id == alert_id_int).first()
+    else:
+        alert = db.query(MlAlert).filter(MlAlert.id == alert_id_int).first()
+        
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    alert.status = "archived"
+    db.commit()
+    return {"status": "success", "message": f"Alert {alert_id} archived"}
+
+
+@public_router.post("/alerts/{alert_id}/investigate")
+def investigate_alert(
+    alert_id: str,
+    db: Session = Depends(require_db),
+):
+    alert_type = "correlation" if alert_id.startswith("corr-") else "ml" if alert_id.startswith("ml-") else None
+    numeric_id = alert_id.replace("corr-", "").replace("ml-", "")
+    
+    if not numeric_id.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid Alert ID")
+    
+    alert_id_int = int(numeric_id)
+    alert = None
+    if alert_type == "correlation":
+        alert = db.query(CorrelatedAlert).filter(CorrelatedAlert.id == alert_id_int).first()
+    else:
+        alert = db.query(MlAlert).filter(MlAlert.id == alert_id_int).first()
+        
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    # Update alert status
+    alert.status = "investigating"
+    
+    # Create an Incident if not already created
+    # Check if any incident already has this alert_id in its 'alerts' list
+    from sqlalchemy import func
+    # Note: Using JSON contains or just manual check for simplicity here
+    existing_incident = None
+    all_incidents = db.query(Incident).all()
+    for inc in all_incidents:
+        if alert_id in (inc.alerts or []):
+            existing_incident = inc
+            break
+            
+    if not existing_incident:
+        # Create a high-fidelity incident
+        title = alert.rule_name if hasattr(alert, 'rule_name') else "Behavioral Anomaly Detected"
+        severity = alert.severity if hasattr(alert, 'severity') else "High"
+        
+        new_incident = Incident(
+            title=f"Investigation: {title}",
+            description=f"Automated incident spawned from alert {alert_id}. Target Host: {alert.host}. User: {alert.user}.",
+            severity=severity.capitalize(),
+            status="In Progress",
+            owner=alert.user or "Analyst-Alpha",
+            alerts=[alert_id],
+            timeline=[{
+                "time": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "action": "Incident spawned from Alert Inbox",
+                "user": "System"
+            }]
+        )
+        db.add(new_incident)
+    
+    db.commit()
+    return {"status": "success", "message": f"Investigation started for {alert_id}. Incident record synchronized."}

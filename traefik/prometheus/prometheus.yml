@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'traefik-gateway'
+
+scrape_configs:
+  # Traefik metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    metrics_path: /metrics
+
+  # Blue Team Platform backend (if metrics exposed)
+  - job_name: 'blueteam-backend'
+    static_configs:
+      - targets: ['blueteam-backend:8000']
+    metrics_path: /metrics
+
+  # Bouclier backend (if metrics exposed)
+  - job_name: 'bouclier-backend'
+    static_configs:
+      - targets: ['bouclier-api:8005']
+    metrics_path: /metrics

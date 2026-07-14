@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-
-const API_URL = "http://localhost:8005";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { apiClient } from "@/lib/api-client";
 
 export interface TrafficEvent {
     timestamp: string;
@@ -47,12 +46,10 @@ export function useSecurityAPI() {
     // Check API connection
     const checkConnection = useCallback(async () => {
         try {
-            const res = await fetch(`${API_URL}/api/status`);
-            if (res.ok) {
-                setIsConnected(true);
-                setError(null);
-                return true;
-            }
+            await apiClient("/api/status");
+            setIsConnected(true);
+            setError(null);
+            return true;
         } catch {
             setIsConnected(false);
             setError("API non disponible. Démarrez le serveur backend.");
@@ -66,11 +63,8 @@ export function useSecurityAPI() {
 
         try {
             setIsLoading(true);
-            const res = await fetch(`${API_URL}/api/traffic/live`);
-            if (res.ok) {
-                const data = await res.json();
-                setTrafficEvents(data.connections || []);
-            }
+            const data = await apiClient<any>("/api/traffic/live");
+            setTrafficEvents(data.connections || []);
         } catch (err) {
             console.error("Error fetching traffic:", err);
         } finally {
@@ -83,11 +77,8 @@ export function useSecurityAPI() {
         if (!isConnected) return;
 
         try {
-            const res = await fetch(`${API_URL}/api/traffic/stats`);
-            if (res.ok) {
-                const data = await res.json();
-                setTrafficStats(data);
-            }
+            const data = await apiClient<TrafficStats>("/api/traffic/stats");
+            setTrafficStats(data);
         } catch (err) {
             console.error("Error fetching stats:", err);
         }
@@ -98,11 +89,8 @@ export function useSecurityAPI() {
         if (!isConnected) return;
 
         try {
-            const res = await fetch(`${API_URL}/api/events`);
-            if (res.ok) {
-                const data = await res.json();
-                setTrafficEvents(data.events || []);
-            }
+            const data = await apiClient<any>("/api/events");
+            setTrafficEvents(data.events || []);
         } catch (err) {
             console.error("Error fetching events:", err);
         }
@@ -113,11 +101,8 @@ export function useSecurityAPI() {
         if (!isConnected) return;
 
         try {
-            const res = await fetch(`${API_URL}/api/ddos/status`);
-            if (res.ok) {
-                const data = await res.json();
-                setDdosStatus(data);
-            }
+            const data = await apiClient<DDoSStatus>("/api/ddos/status");
+            setDdosStatus(data);
         } catch (err) {
             console.error("Error checking DDoS:", err);
         }
@@ -128,11 +113,8 @@ export function useSecurityAPI() {
         if (!isConnected) return;
 
         try {
-            const res = await fetch(`${API_URL}/api/network/internal`);
-            if (res.ok) {
-                const data = await res.json();
-                setNetworkStats(data);
-            }
+            const data = await apiClient<NetworkStats>("/api/network/internal");
+            setNetworkStats(data);
         } catch (err) {
             console.error("Error fetching network stats:", err);
         }
@@ -141,27 +123,20 @@ export function useSecurityAPI() {
     // Start monitoring
     const startMonitoring = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/monitor/start`, { method: "POST" });
-            if (res.ok) {
-                return true;
-            }
+            await apiClient("/api/monitor/start", { method: "POST" });
+            return true;
         } catch {
             return false;
         }
-        return false;
     };
 
-    // Stop monitoring
     const stopMonitoring = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/monitor/stop`, { method: "POST" });
-            if (res.ok) {
-                return true;
-            }
+            await apiClient("/api/monitor/stop", { method: "POST" });
+            return true;
         } catch {
             return false;
         }
-        return false;
     };
 
     // Refresh all data
@@ -214,9 +189,16 @@ export function useSecurityAPI() {
 export function useSecurityWebSocket(onData: (data: unknown) => void) {
     const [isConnected, setIsConnected] = useState(false);
     const [ws, setWs] = useState<WebSocket | null>(null);
+    const onDataRef = useRef(onData);
+
+    // Update ref when onData changes, without triggering reconnection
+    useEffect(() => {
+        onDataRef.current = onData;
+    }, [onData]);
 
     useEffect(() => {
-        const websocket = new WebSocket("ws://localhost:8005/ws/traffic");
+        // Connect to WebSocket
+        const websocket = new WebSocket("ws://localhost:8100/ws/traffic");
 
         websocket.onopen = () => {
             console.log("WebSocket connected");
@@ -226,7 +208,9 @@ export function useSecurityWebSocket(onData: (data: unknown) => void) {
         websocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                onData(data);
+                if (onDataRef.current) {
+                    onDataRef.current(data);
+                }
             } catch (err) {
                 console.error("WebSocket parse error:", err);
             }
@@ -246,7 +230,7 @@ export function useSecurityWebSocket(onData: (data: unknown) => void) {
         return () => {
             websocket.close();
         };
-    }, [onData]);
+    }, []); // Empty dependency array ensures connection happens only once
 
     return { isConnected, ws };
 }

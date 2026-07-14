@@ -7,6 +7,7 @@ class ScanJob(Base):
     __tablename__ = "scan_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(String, index=True, default=None, nullable=True)
     tool = Column(String, index=True)  # zap, nuclei
     target = Column(String, index=True)
     status = Column(String, default="pending", index=True)  # pending, running, completed, failed, stopped
@@ -22,6 +23,7 @@ class Finding(Base):
     __tablename__ = "findings"
 
     id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(String, index=True, default=None, nullable=True)
     scan_job_id = Column(Integer, ForeignKey("scan_jobs.id"), index=True)
     severity = Column(String, index=True)  # critical, high, medium, low, info
     title = Column(String)

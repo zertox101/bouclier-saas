@@ -35,34 +35,9 @@ def lookup_geoip(ip: str) -> Optional[Dict[str, Any]]:
     if not ip:
         return None
         
-    # FALLBACK MOCK FOR DEMO/DEV IF DB IS MISSING
     if not _city_reader or not is_public_ip(ip):
-        # We still want to show dots on the map for demo
-        import random
-        # Seed with IP for consistency
-        try:
-            seed_val = sum(int(b) for b in ipaddress.ip_address(ip).packed)
-            random.seed(seed_val)
-        except:
-            random.seed(len(ip))
-            
-        lat = random.uniform(-40, 60)
-        lon = random.uniform(-170, 170)
-        
-        return {
-            "ip": ip,
-            "country": {"iso_code": "SIM", "name": "Simulated Node"},
-            "city": {"name": "Virtual Hub"},
-            "location": {
-                "lat": lat,
-                "lon": lon,
-            },
-            "asn": {"number": 0, "org": "Dev Network"},
-            "latitude": lat, # Backward compatibility for some mappers
-            "longitude": lon,
-            "country_name": "Simulated Node",
-            "country_code": "SIM"
-        }
+        # No more mock data. Return None to indicate no real GeoIP available.
+        return None
 
     output: Dict[str, Any] = {
         "ip": ip,

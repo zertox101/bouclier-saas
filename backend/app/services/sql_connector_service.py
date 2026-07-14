@@ -55,16 +55,17 @@ class SQLConnectorService:
         user_id: str
     ) -> List[Dict[str, Any]]:
         # 1. Audit start
-        audit = AuditLog(
-            org_id=connector.org_id,
-            user_id=user_id,
-            action="SQL_QUERY_EXEC",
-            entity_type="sql_connector",
-            entity_id=str(connector.id),
-            metadata_json={"query": query_template, "params": list(params.keys())}
-        )
-        db.add(audit)
-        db.commit()
+        if db:
+            audit = AuditLog(
+                org_id=connector.org_id,
+                user_id=user_id,
+                action="SQL_QUERY_EXEC",
+                entity_type="sql_connector",
+                entity_id=str(connector.id),
+                metadata_json={"query": query_template, "params": list(params.keys())}
+            )
+            db.add(audit)
+            db.commit()
 
         # 2. Safety Checks (Read-only check)
         forbidden_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER", "GRANT", "REVOKE"]

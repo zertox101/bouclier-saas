@@ -25,7 +25,7 @@ from app.services.scanner import scan_network_connections, analyze_packet, detec
 from app.utils.helpers import get_country_name, get_country_from_ip, get_service, get_tone
 from app.services.geoip import get_geoip_cached, is_public_ip
 from app.services.analytics import analytics_engine
-from app.services.llm import llm_engine
+from app.services.llm import llm_service
 from app.core.database import get_db, redis_client
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -37,8 +37,21 @@ router.include_router(alerts_router, prefix="/api", tags=["alerts"])
 router.include_router(explain_router, prefix="/api", tags=["explain"])
 router.include_router(features_router, prefix="/api", tags=["features"])
 from app.routes.admin_connectors import router as admin_connectors_router
+from app.routes.forensics import router as forensics_router
+from app.routes.assets import router as assets_router
+from app.routes.incidents import router as incidents_router
+from app.routes.telemetry import router as telemetry_router
+from app.routes.threat_map import router as threat_map_router
+from app.routes.mini_agent import router as mini_agent_router
+
 router.include_router(admin_connectors_router, prefix="/api/admin", tags=["admin"])
+router.include_router(forensics_router, tags=["Forensics"])
 router.include_router(public_alerts_router, tags=["alerts"])
+router.include_router(assets_router, prefix="/api", tags=["assets"])
+router.include_router(incidents_router, prefix="/api/incidents", tags=["incidents"])
+router.include_router(telemetry_router, prefix="/api", tags=["telemetry"])
+router.include_router(threat_map_router, prefix="/api/threat-map", tags=["threat_map"])
+router.include_router(mini_agent_router)
 
 FLOW_STREAM_NAME = os.getenv("REDIS_FLOW_STREAM_NAME", "event_stream")
 NET_IO_STATE = {
@@ -771,15 +784,47 @@ def get_traffic_sources():
 async def chat_sentinel(chat: ChatMessage, request: Request):
     """Sentinel AI Chat Endpoint with Security Guardrails"""
     msg = chat.message
+    print(f"[Sentinel] Incoming chat: {msg}")
     
     # 1. Prompt Injection Check
-    from app.services.prompt_guard import is_prompt_injection
-    if is_prompt_injection(msg):
+    from app.services.prompt_guard import analyze_prompt_security
+    is_blocked, score, reason = analyze_prompt_security(msg)
+    
+    if is_blocked:
+        # LOG TO THREAT MAP (Visualize on 3D Globe)
+        if redis_client:
+            from app.services.geoip import get_geoip_cached
+            client_ip = request.client.host if request.client else "127.0.0.1"
+            
+            geo = get_geoip_cached(client_ip)
+            lat = geo.get("lat", 0) if geo else 0
+            lon = geo.get("lon", 0) if geo else 0
+            country = geo.get("country", "Unknown") if geo else "Unknown"
+            
+            attack_event = {
+                "timestamp_epoch": time.time(),
+                "severity": "critical",
+                "rule_id": f"AI_SENTINEL_BLOCK:{reason}",
+                "src_ip": client_ip,
+                "src_lat": lat, 
+                "src_lon": lon,
+                "src_country": country,
+                "dst_ip": "SENTINEL_CORE_AI",
+                "dst_lat": 48.8566, # Paris SOC
+                "dst_lon": 2.3522,
+                "type": "SENTINEL_GUARD_ALERT"
+            }
+            try:
+                redis_client.xadd(FLOW_STREAM_NAME, {"payload": json.dumps(attack_event)})
+                print(f"[Sentinel] Logged AI attack to stream: {reason}")
+            except Exception as e:
+                print(f"[Sentinel] Redis log error: {e}")
+
         return {
             "role": "assistant",
             "timestamp": datetime.now().isoformat(),
-            "content": "I'm sorry, but I cannot process this request as it violates security policies (Sentinel Guard triggered).",
-            "actions": [{"type": "alert", "label": "Security Policy Violation", "severity": "high"}]
+            "content": f"🚨 [SENTINEL_GUARD] Security violation detected. Attack vector: {reason}. This attempt has been logged to the Global Threat Map.",
+            "actions": [{"type": "alert", "label": "Sentinel Protection Triggered", "severity": "critical"}]
         }
 
     response = {
@@ -802,7 +847,8 @@ async def chat_sentinel(chat: ChatMessage, request: Request):
     
     print(f"[Sentinel] Received Message: {msg}")
     try:
-        content = llm_engine.chat_response(msg, context)
+        print(f"[Sentinel] Calling LLM engine for: {msg[:20]}...")
+        content = llm_service.chat_response(msg, context)
         print(f"[Sentinel] Engine Response: {content[:50]}...")
         response["content"] = content
     except Exception as e:
@@ -817,7 +863,7 @@ async def chat_sentinel(chat: ChatMessage, request: Request):
 @router.post("/api/sentinel/analyze-tools")
 async def analyze_tools(request: ToolAnalysisRequest):
     """Analyze tool outputs using Sentinel AI"""
-    analysis = llm_engine.analyze_tool_output(request.tool_name, request.logs)
+    analysis = llm_service.analyze_tool_output(request.tool_name, request.logs)
     
     return analysis
 

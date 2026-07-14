@@ -3,7 +3,17 @@ interface ApiOptions extends RequestInit {
     json?: any;
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8005';
+// Dynamic Base URL detection for cross-environment reliability
+const getBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        return `http://${hostname}:8005`;
+    }
+    return 'http://localhost:8005';
+};
+
+const BASE_URL = getBaseUrl();
 
 export class ApiError extends Error {
     status: number;
@@ -16,16 +26,26 @@ export class ApiError extends Error {
 }
 
 export async function apiClient<T = any>(endpoint: string, { json, ...customConfig }: ApiOptions = {}): Promise<T> {
-    const headers = {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const orgId = typeof window !== 'undefined' ? localStorage.getItem('auth_org_id') : null;
+    
+    const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...(customConfig.headers || {}),
+        ...(customConfig.headers as any || {}),
     };
 
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (orgId) {
+        headers['X-Organization-ID'] = orgId;
+    }
+
     const config: RequestInit = {
-        method: json ? 'POST' : 'GET',
+        method: customConfig.method || (json ? 'POST' : 'GET'),
         ...customConfig,
-        headers: headers as any,
-        body: json ? JSON.stringify(json) : undefined,
+        headers,
+        body: json ? JSON.stringify(json) : customConfig.body,
         credentials: 'include',
     };
 
@@ -35,9 +55,18 @@ export async function apiClient<T = any>(endpoint: string, { json, ...customConf
         const response = await fetch(url, config);
 
         if (response.status === 401) {
-            // Ideally trigger redirect or logout logic here
-            // window.location.href = '/login'; // simplified
+            // Token expired or invalid
+            console.warn("[API] 401 Unauthorized - Token may be missing or invalid.");
+            /*
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('auth_user');
+                window.location.href = '/login';
+            }
+            */
         }
+
+        if (response.status === 204) return {} as T;
 
         const data = await response.json().catch(() => ({}));
 
@@ -47,7 +76,6 @@ export async function apiClient<T = any>(endpoint: string, { json, ...customConf
         return data;
     } catch (error) {
         if (error instanceof ApiError) throw error;
-        // Handle network errors or return mock if needed for demo
         console.error("API Fetch Failed:", error);
         throw error;
     }

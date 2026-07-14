@@ -23,7 +23,8 @@ class TelemetryEvent(Base):
     severity = Column(String, default="info")
     message = Column(String)
     payload_json = Column(JSON, default={})
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="new")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 class TelemetryCounter(Base):
     __tablename__ = "telemetry_counters"

@@ -9,8 +9,8 @@ import {
     Shield,
     Activity,
     Zap,
-    Lock,
-    Cpu
+    Database,
+    Globe
 } from 'lucide-react';
 
 const DOCS_NAV = [
@@ -24,40 +24,40 @@ const DOCS_NAV = [
         ],
     },
     {
-        title: 'Core Concepts',
+        title: 'Core Operations',
         icon: Shield,
         items: [
             { title: 'SOC Dashboard', href: '/docs/dashboard' },
+            { title: 'Operation Expert', href: '/docs/expert' },
             { title: 'Signals & Alerts', href: '/docs/alerts' },
-            { title: 'Sensors Deployment', href: '/docs/sensors' },
         ],
     },
     {
-        title: 'Hardware Hacking',
-        icon: Cpu,
+        title: 'Intelligence Data',
+        icon: Database,
         items: [
-            { title: 'Flipper Command', href: '/docs/flipper' },
-            { title: 'RF & Sub-GHz', href: '/docs/rf-subghz' },
-            { title: 'Alfa WiFi Setup', href: '/docs/wifi-setup' },
+            { title: 'Tactical Datasets', href: '/docs/datasets' },
+            { title: 'AI Model Training', href: '/docs/training' },
+            { title: 'Feature Extraction', href: '/docs/features' },
         ],
     },
     {
-        title: 'Purple Teaming',
-        icon: Activity,
+        title: 'Gotham Suite',
+        icon: Globe,
         items: [
-            { title: 'Attack Scenarios', href: '/docs/attack-scenarios' },
-            { title: 'MITRE Mapping', href: '/docs/mitre' },
-            { title: 'Playbooks', href: '/docs/playbooks' },
+            { title: 'Gaia 3D World Map', href: '/docs/gaia' },
+            { title: 'OSINT Explorer', href: '/docs/osint' },
+            { title: 'Sentinel AI', href: '/docs/sentinel' },
         ],
     },
     {
-        title: 'Security Tools',
+        title: 'Offensive Arsenal',
         icon: Terminal,
         items: [
-            { title: 'Tool Integration', href: '/docs/tools-integration' },
+            { title: 'Kali Integration', href: '/docs/kali' },
+            { title: 'Red Team Ops', href: '/docs/red-team' },
             { title: 'Nmap Scanning', href: '/docs/nmap' },
             { title: 'Nuclei Scanner', href: '/docs/nuclei' },
-            { title: 'OWASP ZAP', href: '/docs/zap' },
         ],
     },
     {
@@ -65,7 +65,6 @@ const DOCS_NAV = [
         icon: BookOpen,
         items: [
             { title: 'API Reference', href: '/docs/api' },
-            { title: 'Configuration', href: '/docs/config' },
             { title: 'Security Policy', href: '/docs/security' },
         ],
     },

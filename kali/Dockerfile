@@ -7,6 +7,9 @@ RUN apt-get update \
         dnsutils \
         iputils-ping \
         nmap \
+        nikto \
+        gobuster \
+        netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/scan

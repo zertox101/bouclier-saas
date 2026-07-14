@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { LogEntry, Tool } from '@/types/tools';
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { apiClient } from '@/lib/api-client';
 
 const riskColors = {
     low: 'text-success border-success/20 bg-success/10',
@@ -74,6 +75,7 @@ interface TrafficStats {
 
 interface LLMAnalysis {
     summary: string;
+    reasoning?: string;
     threats: string[];
     recommendations: string[];
     riskScore: number;
@@ -113,6 +115,7 @@ export default function ToolsPage() {
     );
 
     const [searchQuery, setSearchQuery] = useState('');
+    const [mounted, setMounted] = useState(false);
 
     const filteredTools = useMemo(() => {
         let result = tools;
@@ -161,9 +164,8 @@ export default function ToolsPage() {
 
     const fetchTrafficStats = async () => {
         try {
-            const res = await fetch(`${securityApiBase}/api/traffic/stats`);
-            if (res.ok) {
-                const data = await res.json();
+            const data = await apiClient('/api/traffic/stats');
+            if (data) {
                 setTrafficStats({
                     inbound: { total: data.inbound_bytes ?? 0, rate: data.inbound_rate ?? 0, packets: data.inbound_packets ?? 0 },
                     outbound: { total: data.outbound_bytes ?? 0, rate: data.outbound_rate ?? 0, packets: data.outbound_packets ?? 0 },
@@ -173,6 +175,7 @@ export default function ToolsPage() {
     };
 
     useEffect(() => {
+        setMounted(true);
         const queryParams = new URLSearchParams(window.location.search);
         const queryToolId = queryParams.get('tool_id');
 
@@ -184,6 +187,15 @@ export default function ToolsPage() {
             clearInterval(trafficInterval);
         };
     }, []);
+
+    const logContainerRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [logs]);
+
+    if (!mounted) return null;
 
     const runTool = async (tool: Tool) => {
         if (isRunning) {
@@ -262,15 +274,11 @@ export default function ToolsPage() {
         setIsAnalyzing(true);
         try {
             const logText = targetLogs.filter(l => l?.message).map(l => l.message).join('\n');
-            const res = await fetch(`${securityApiBase}/api/sentinel/analyze-tools`, {
+            const data = await apiClient('/api/sentinel/analyze-tools', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tool_name: selectedTool?.name, logs: logText })
+                json: { tool_name: selectedTool?.name, logs: logText }
             });
-            if (res.ok) {
-                const data = await res.json();
-                setLLMAnalysis(data);
-            }
+            setLLMAnalysis(data);
         } catch (err) { } finally {
             setIsAnalyzing(false);
         }
@@ -290,13 +298,6 @@ export default function ToolsPage() {
         URL.revokeObjectURL(url);
     };
 
-    const logContainerRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (logContainerRef.current) {
-            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-        }
-    }, [logs]);
-
     return (
         <div className="space-y-8 animate-fade-in relative z-10 pb-12 zellige-pattern">
             {/* Cyber Header */}
@@ -312,11 +313,17 @@ export default function ToolsPage() {
                         <h1 className="text-display mb-1 text-text-1">
                             Tactical <span className="text-p-400">Toolkit</span>
                         </h1>
-                        <div className="flex items-center gap-2">
-                            <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", platformMode === "emulation" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" : "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]")} />
-                            <span className={cn("text-[9px] font-black uppercase tracking-widest", platformMode === "emulation" ? "text-red-400" : "text-amber-400")}>
-                                Mode: {platformMode === "emulation" ? "Active Advisory Emulation (C2)" : "Synthetic Simulation (Offline)"}
-                            </span>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className={cn("h-1.5 w-1.5 rounded-full animate-pulse", platformMode === "emulation" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" : "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]")} />
+                                <span className={cn("text-[9px] font-black uppercase tracking-widest", platformMode === "emulation" ? "text-red-400" : "text-amber-400")}>
+                                    Mode: {platformMode === "emulation" ? "Active Advisory Emulation (C2)" : "Synthetic Simulation (Offline)"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-1 rounded bg-info/10 border border-info/20">
+                                <Globe className="h-3 w-3 text-info" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-info">Enterprise Scanning Active (Public & Private)</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -582,6 +589,12 @@ export default function ToolsPage() {
                                                     <span className="text-[9px] font-black text-text-2 uppercase tracking-widest mb-3 block">Neural Summary</span>
                                                     <p className="text-xs text-text-1 leading-relaxed font-medium italic">"{llmAnalysis?.summary}"</p>
                                                 </div>
+                                                {llmAnalysis?.reasoning && (
+                                                    <div className="p-4 rounded-xl bg-p-500/5 border border-p-500/10 space-y-2">
+                                                        <span className="text-[8px] font-black text-p-400 uppercase tracking-widest">Neural Reasoning</span>
+                                                        <p className="text-[10px] text-text-2 leading-relaxed font-mono opacity-80">{llmAnalysis.reasoning}</p>
+                                                    </div>
+                                                )}
                                                 <div className="p-5 rounded-xl bg-bg-1 border border-border-1 space-y-3">
                                                     <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
                                                         <span className="text-text-3">Risk Assessment</span>

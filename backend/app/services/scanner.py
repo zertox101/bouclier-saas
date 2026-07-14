@@ -65,42 +65,37 @@ def detect_ddos(packets: List[Dict], threshold: int = 50) -> Dict:
 
 # ==================== Network Scanner ====================
 def scan_network_connections():
-    """Scan current network connections using netstat"""
+    """Scan current network connections using psutil (cross-platform, reliable)"""
+    import psutil
     try:
-        # Cross-platform handling could be added here
-        result = subprocess.run(
-            ['netstat', '-n'],
-            capture_output=True, text=True, timeout=5,
-            encoding='utf-8', errors='replace'
-        )
-        
         connections = []
-        for line in result.stdout.split('\n'):
-            if 'ESTABLISHED' in line or 'TIME_WAIT' in line or 'SYN' in line:
-                parts = line.split()
-                if len(parts) >= 4:
-                    try:
-                        local = parts[1]
-                        remote = parts[2]
-                        state = parts[3]
+        conns = psutil.net_connections(kind='inet')
+        for conn in conns:
+            if conn.status in ['ESTABLISHED', 'TIME_WAIT', 'SYN_SENT', 'SYN_RECV']:
+                try:
+                    local_ip, local_port = conn.laddr
+                    remote_ip = None
+                    remote_port = 0
+                    if conn.raddr:
+                        remote_ip, remote_port = conn.raddr
+                    
+                    if not remote_ip:
+                        continue
                         
-                        local_ip, local_port = local.rsplit(':', 1)
-                        remote_ip, remote_port = remote.rsplit(':', 1)
-                        
-                        connections.append({
-                            "timestamp": datetime.now().isoformat(),
-                            "src_ip": local_ip,
-                            "src_port": int(local_port),
-                            "dst_ip": remote_ip,
-                            "dst_port": int(remote_port),
-                            "state": state,
-                            "service": get_service(int(remote_port)),
-                            "country": get_country_from_ip(remote_ip)
-                        })
-                    except:
-                        pass
-        
+                    connections.append({
+                        "timestamp": datetime.now().isoformat(),
+                        "src_ip": local_ip,
+                        "src_port": int(local_port),
+                        "dst_ip": remote_ip,
+                        "dst_port": int(remote_port),
+                        "state": conn.status,
+                        "service": get_service(int(remote_port)),
+                        "country": get_country_from_ip(remote_ip)
+                    })
+                except Exception:
+                    pass
         return connections
     except Exception as e:
-        print(f"Error scanning: {e}")
+        print(f"Error scanning with psutil: {e}")
         return []
+

@@ -145,7 +145,7 @@ export function Footer() {
                 <div className="pt-8 border-t border-border-1">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                         <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">
-                            © {new Date().getFullYear()} Bouclier. All rights reserved.
+                            © {typeof window !== 'undefined' ? new Date().getFullYear() : '2026'} Bouclier. All rights reserved.
                         </p>
                         <div className="flex items-center gap-2 text-xs text-text-3">
                             <span className="flex items-center gap-1">

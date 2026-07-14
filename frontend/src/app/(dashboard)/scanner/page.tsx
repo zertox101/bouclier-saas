@@ -67,7 +67,6 @@ const remediationDB: Record<string, { title: string; steps: string[] }> = {
 
 export default function ScannerPage() {
     const toolsApiBase = process.env.NEXT_PUBLIC_TOOLS_API_BASE || "http://localhost:8100";
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
 
     const [activeTab, setActiveTab] = useState<'local' | 'network' | 'iplookup' | 'remediation'>('local');
     const [scanStatus, setScanStatus] = useState({ isScanning: false, progress: 0, currentTask: '' });
@@ -138,8 +137,7 @@ export default function ScannerPage() {
         setScanStatus({ isScanning: true, progress: 10, currentTask: `Resolving Node: ${ipInput}` });
         try {
             const jobData = await runToolJob("ip_scanner", { target: ipInput });
-            // Simplified for theme demo
-            setIpResult({ target: ipInput, status: 'Completed', timestamp: new Date().toISOString() });
+            setIpResult({ target: ipInput, status: jobData?.status || 'Completed', data: jobData, timestamp: new Date().toISOString() });
         } catch (e) { } finally {
             setScanStatus({ isScanning: false, progress: 100, currentTask: 'Lookup Resolved' });
         }
@@ -262,7 +260,7 @@ export default function ScannerPage() {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        placeholder="TARGET_NODE_IP"
+                                        placeholder="TARGET_NODE_IP_OR_DOMAIN"
                                         value={localTarget}
                                         onChange={(e) => setLocalTarget(e.target.value)}
                                         className="bg-slate-950 border border-white/5 rounded-lg px-4 py-2 text-[10px] font-black text-white uppercase tracking-widest focus:outline-none focus:border-emerald-500/30 w-48"
@@ -329,7 +327,7 @@ export default function ScannerPage() {
                                     </div>
                                     <input
                                         type="text"
-                                        placeholder="TARGET_NODE_RECON_IP_ADDRESS..."
+                                        placeholder="TARGET_NODE_IP_OR_DOMAIN_ADDRESS..."
                                         value={ipInput}
                                         onChange={(e) => setIpInput(e.target.value)}
                                         className="w-full bg-slate-950 border border-white/5 rounded-2xl pl-16 pr-6 py-5 text-xs font-black text-white placeholder:text-slate-700 uppercase tracking-widest focus:outline-none focus:border-emerald-500/30 transition-all"
@@ -390,8 +388,18 @@ export default function ScannerPage() {
                                     ))}
                                 </div>
                                 <div className="pt-10">
-                                    <button className="w-full py-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-cyan-500/20 transition-all shadow-2xl active:scale-95">
-                                        Execute Auto-Mitigation
+                                    <button 
+                                        onClick={async () => {
+                                            setScanStatus({ isScanning: true, progress: 0, currentTask: 'Initializing Patch...' });
+                                            try {
+                                                await runToolJob("auto_patch", { target: localTarget || '127.0.0.1', remediation_id: selectedRemediation });
+                                            } catch(e) {}
+                                            setScanStatus({ isScanning: false, progress: 100, currentTask: 'Patch Successfully Deployed' });
+                                        }}
+                                        disabled={scanStatus.isScanning}
+                                        className="w-full py-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-cyan-500/20 transition-all shadow-2xl active:scale-95 disabled:opacity-30"
+                                    >
+                                        {scanStatus.isScanning ? "DEPLOYING..." : "Execute Auto-Mitigation"}
                                     </button>
                                 </div>
                             </motion.div>

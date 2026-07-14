@@ -31,7 +31,7 @@ export async function POST(req: Request) {
                 email,
                 name,
                 password: hashedPassword,
-                role: 'USER',
+                role: 'ANALYST',
                 organization: {
                     create: {
                         name: `${name}'s Organization`,

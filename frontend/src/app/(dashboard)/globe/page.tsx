@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-const NetworkGPSMap = dynamic(() => import('@/components/NetworkGPSMap'), { ssr: false });
+const NetworkGPSMap = dynamic(() => import('@/components/maps/NetworkGPSMap'), { ssr: false });
 
 // 2D Network GPS Threat Visualization Page
 

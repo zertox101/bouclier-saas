@@ -1,14 +1,9 @@
 
 import { PrismaClient } from '@prisma/client'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
-import Database from 'better-sqlite3'
-import path from 'path'
 import bcrypt from 'bcryptjs'
 
 async function seed() {
-    const dbPath = path.join(process.cwd(), 'dev.db')
-    const adapter = new PrismaBetterSqlite3(new Database(dbPath))
-    const prisma = new PrismaClient({ adapter })
+    const prisma = new PrismaClient()
 
     console.log('--- 🛡️ Starting Tactical User Seeding ---')
 

@@ -4,7 +4,7 @@ Had l-guide fih kamel l-awamir (commands) bach t-demarré o t-troubleshooti l-pl
 
 ---
 
-## 🛰️ Service Mapping (L-Khrita dial l-Ports)
+## 🛰️ Service Mapping (mapin-Ports)
 
 | Service | Port | Description |
 | :--- | :--- | :--- |
@@ -16,10 +16,11 @@ Had l-guide fih kamel l-awamir (commands) bach t-demarré o t-troubleshooti l-pl
 | **PostgreSQL** | `5433` | Database dial l-platform |
 | **Redis** | `6380` | Cache o Real-time streaming |
 | **ZAP Scanner** | `8081` | Web Security Scanner |
+| **OpenVAS (GVM)** | `9392` | Network Vulnerability Management |
 
 ---
 
-## ⚡ Quick Start (Docker) - L-khidma s-sahla
+## ⚡ Quick Start (Docker) - 
 
 Bach t-demarré kolchi b-mra waheda:
 

@@ -1,0 +1,32 @@
+  # -- RAPTOR (Autonomous Security Research Framework) --
+  raptor:
+    build:
+      context: ./services/raptor
+      dockerfile: Dockerfile
+    container_name: bouclier-raptor
+    restart: always
+    privileged: true  # Required for rr deterministic debugger
+    cap_add:
+      - SYS_PTRACE  # For debugging capabilities
+    security_opt:
+      - seccomp:unconfined  # Needed for some tools
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=  # Set your Anthropic API key here
+      - OPENAI_API_KEY=  # Set your OpenAI API key here if needed
+    volumes:
+      - ./raptor-data:/app/out:rw  # Persistent storage for findings, reports, etc.
+      - ./raptor-logs:/app/logs:rw  # Log storage
+      - ./infra/logs:/app/infra-logs:ro  # Read-only access to infra logs if needed
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container operations (if needed)
+    networks:
+      - core-net
+      - ai-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'  # RAPTOR can be resource intensive
+          memory: '6GB'  # As noted in devcontainer docs, image is ~6GB and needs RAM
+    depends_on:
+      - ollama:
+        condition: service_healthy

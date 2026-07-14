@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { apiClient } from '@/lib/api-client'
 
 type AlertDetail = {
     id: string
@@ -18,7 +19,6 @@ type AlertDetail = {
 
 export default function AlertDetailPage({ params }: { params: { id: string } }) {
     const router = useRouter()
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005"
     const [alert, setAlert] = useState<AlertDetail | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -29,11 +29,7 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
         const fetchAlert = async () => {
             setLoading(true)
             try {
-                const res = await fetch(`${apiBase}/alerts/${params.id}`)
-                if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}`)
-                }
-                const data = await res.json()
+                const data = await apiClient(`/alerts/${params.id}`)
                 setAlert({
                     id: data.id,
                     rule_id: data.rule_id,
@@ -54,17 +50,14 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
             }
         }
         fetchAlert()
-    }, [apiBase, params.id])
+    }, [params.id])
 
     const createCase = async () => {
         if (!alert) return
         setCreating(true)
         try {
-            const res = await fetch(`${apiBase}/cases/from-alert`, {
+            const data = await apiClient('/cases/from-alert', {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
                 body: JSON.stringify({
                     alert_id: alert.id,
                     title: caseTitle,
@@ -72,10 +65,6 @@ export default function AlertDetailPage({ params }: { params: { id: string } }) 
                     checklist: ["Review evidence", "Validate owner", "Document response"],
                 }),
             })
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`)
-            }
-            const data = await res.json()
             router.push(`/app/cases/${data.id}`)
         } catch (err) {
             console.error(err)

@@ -1,224 +1,314 @@
-version: '3.8'
-
 services:
+  # ── Gateway / Reverse Proxy ──────────────────────
+  gateway:
+    build:
+      context: ../infra/gateway
+      dockerfile: Dockerfile
+    container_name: shield-gateway
+    restart: always
+    ports:
+      - "${GATEWAY_PORT:-80}:80"
+    networks:
+      - public-net
+      - core-net
+      - ai-net
+      - bouclier-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/log/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+  # ── Database ─────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: shield-postgres
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=shield_db
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASS:-postgres}
+      - POSTGRES_DB=${DB_NAME:-shield_db}
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-shield_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - shield-network
+      - bouclier-net
 
+  # ── Cache ────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: shield-redis
+    restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
-      - shield-network
+      - bouclier-net
 
+  # ── AI / LLM ─────────────────────────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: shield-ollama
+    restart: unless-stopped
     ports:
       - "11434:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
-      - shield-network
+      - bouclier-net
 
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: shield-ollama-init
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - LLM_MODEL=llama3.2:3b
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: [ "sleep 3 && ollama pull $${LLM_MODEL:-llama3.2:3b}" ]
-    volumes:
-      - ollama_data:/root/.ollama
-    depends_on:
-      - ollama
-    networks:
-      - shield-network
-    restart: "no"
-
+  # ── Backend API ──────────────────────────────────
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
     container_name: shield-backend
+    restart: unless-stopped
     ports:
-      - "8005:8005"
+      - "${BACKEND_PORT:-8005}:8005"
     volumes:
-      - ../backend:/code
       - ../geoip:/geoip
+      - ../mythos-launch-response-master:/app/mythos-launch-response-master
     environment:
-      - ENVIRONMENT=development
-      - DB_USER=postgres
-      - DB_PASS=postgres
+      - ENVIRONMENT=${NODE_ENV:-production}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=shield_db
+      - DB_NAME=${DB_NAME:-shield_db}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_STREAM_NAME=event_stream
-      - REDIS_STREAM_MAXLEN=10000
-      - REDIS_CONSUMER_GROUP=event_workers
-      - REDIS_FLOW_STREAM_NAME=event_stream
-      - REDIS_FLOW_STREAM_MAXLEN=50000
-      - JWT_SECRET=change-me
-      - FEATURE_WINDOW_SECONDS=3600
-      - SEQUENCE_WINDOW_SECONDS=900
-      - SEQUENCE_MAX_LEN=20
-      - RAG_SOURCE_DIR=/code/app/rag_sources
-      - GRU_MODEL_PATH=/code/app/ml_artifacts/gru_model.pt
-      - GRU_SCALER_PATH=/code/app/ml_artifacts/gru_scaler.joblib
-      - GRU_META_PATH=/code/app/ml_artifacts/gru_meta.json
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
       - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
       - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
-      - GEOIP_CACHE_TTL=604800
-      - LLM_PROVIDER=ollama
-      - LLM_BASE_URL=http://ollama:11434
-      - LLM_MODEL=llama3.2:3b
-      - LLM_TIMEOUT=30
+      - OFFENSIVE_MODE=${OFFENSIVE_MODE:-true}
+      - SAFE_MODE=${SAFE_MODE:-false}
+      - ALLOW_EXTERNAL_TARGETS=${ALLOW_EXTERNAL_TARGETS:-true}
+      - MAX_SCAN_SCOPE=${MAX_SCAN_SCOPE:-10.0.0.0/24}
+      - TOOLS_API_URL=http://tools-api:8100
+      - TOOLS_API_SECRET=${TOOLS_API_SECRET:-}
     depends_on:
-      - postgres
-      - redis
-      - ollama
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
-      - shield-network
+      - bouclier-net
+      - academy-net
 
-  worker:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: shield-worker
-    command: [ "python", "-m", "app.worker" ]
-    volumes:
-      - ../backend:/code
-      - ../geoip:/geoip
-    environment:
-      - DB_USER=postgres
-      - DB_PASS=postgres
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=shield_db
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
-      - REDIS_STREAM_NAME=event_stream
-      - REDIS_STREAM_MAXLEN=10000
-      - REDIS_CONSUMER_GROUP=event_workers
-      - REDIS_CONSUMER_NAME=worker-1
-      - REDIS_FLOW_STREAM_NAME=flows
-      - REDIS_FLOW_STREAM_MAXLEN=50000
-      - FEATURE_WINDOW_SECONDS=3600
-      - SEQUENCE_WINDOW_SECONDS=900
-      - SEQUENCE_MAX_LEN=20
-      - GRU_MODEL_PATH=/code/app/ml_artifacts/gru_model.pt
-      - GRU_SCALER_PATH=/code/app/ml_artifacts/gru_scaler.joblib
-      - GRU_META_PATH=/code/app/ml_artifacts/gru_meta.json
-      - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
-      - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
-      - GEOIP_CACHE_TTL=604800
-    depends_on:
-      - backend
-      - redis
-      - postgres
-    networks:
-      - shield-network
-
-  frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    container_name: shield-frontend
-    ports:
-      - "3001:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8005
-      - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost:8100
-    depends_on:
-      - backend
-    networks:
-      - shield-network
-
+  # ── Tools API ────────────────────────────────────
   tools-api:
     build:
       context: ..
       dockerfile: tools-api/Dockerfile
     container_name: shield-tools
+    restart: unless-stopped
     ports:
-      - "8100:8100"
+      - "${TOOLS_PORT:-8100}:8100"
     volumes:
       - ../tools:/opt/tools
-      - ../tools-api:/opt/tools-api
       - ../tools/outputs:/opt/tools/outputs
       - ../tools/inputs:/opt/tools/inputs
     environment:
-      - TOOLS_SECURITY_DIR=/opt/tools/attack-simulations/security
-      - TOOLS_SIM_DIR=/opt/tools/attack-simulations/simulation
-      - TOOLS_OUTPUT_DIR=/opt/tools/outputs
-      - TOOLS_CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
-      - TOOLS_REQUIRE_PRIVATE=1
-      - TOOLS_ALLOW_PUBLIC_TARGETS=1
-      - TOOLS_ENABLE_WEB_SCANNER=1
       - TOOLS_ENABLE_OFFENSIVE=1
-      - TOOLS_MAX_SNIFF_DURATION=300
-      - TOOLS_MAX_SNIFF_PACKETS=5000
-      - TOOLS_MAX_PING_COUNT=10
-      - TOOLS_MAX_TRACEROUTE_HOPS=20
-      - TOOLS_MAX_GOBUSTER_THREADS=20
-      - TOOLS_MAX_FFUF_THREADS=20
-      - TOOLS_MAX_HYDRA_THREADS=4
-      - TOOLS_MAX_MASSCAN_RATE=5000
-      - TOOLS_CMD_TIMEOUT=180
+      - TOOLS_ENABLE_WEB_SCANNER=1
+      - TOOLS_REQUIRE_PRIVATE=0
+      - TOOLS_ALLOW_PUBLIC_TARGETS=${ALLOW_PUBLIC_TARGETS:-1}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    depends_on:
+      ollama:
+        condition: service_healthy
     networks:
-      - shield-network
+      - bouclier-net
+      - academy-net
 
+  # ── Frontend ─────────────────────────────────────
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8005}
+        NEXT_PUBLIC_TOOLS_API_BASE: http://localhost:${TOOLS_PORT:-8100}
+    container_name: shield-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3002}:3000"
+    environment:
+      - INTERNAL_API_URL=http://backend:8005
+      - BACKEND_URL=http://backend:8005
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-change_me}
+      - NEXTAUTH_URL=http://localhost:${FRONTEND_PORT:-3002}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bouclier-net
+
+  # ── RAPTOR AI (Autonomous Security Research) ────
+  raptor:
+    build:
+      context: ../services/raptor
+      dockerfile: Dockerfile
+    container_name: shield-raptor
+    restart: unless-stopped
+    privileged: true
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ../raptor-data:/app/out:rw
+      - ../raptor-logs:/app/logs:rw
+      - ../infra/logs:/app/infra-logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - core-net
+      - ai-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 6GB
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # ── Kali Attacker ────────────────────────────────
   kali-attacker:
     build:
       context: ../kali
       dockerfile: Dockerfile
-    container_name: shield-kali-attacker
+    container_name: shield-kali
+    restart: unless-stopped
     environment:
       - API_URL=http://backend:8005/api/events/ingest
-      - TARGETS_FILE=/opt/scan/targets.txt
-      - SRC_IP=203.0.113.10
-      - EVENT_USER=lab-scanner
-      - HOST_NAME=kali-attacker
-      - EVENT_TYPE=port_scan
-      - SCAN_SEVERITY=low
-      - SCAN_PORTS=22,80,443,445,3389,8080,8443,3306,5432,8005,3000,8501,8100
-      - ALLOW_PUBLIC_TARGETS=1
-      - PUBLIC_TARGETS_FILE=/opt/scan/targets_public.txt
-      - REQUIRE_PUBLIC_ALLOWLIST=1
-      - AUTO_SCAN=1
-      - INTERVAL_SEC=60
-    volumes:
-      - ../kali/targets.txt:/opt/scan/targets.txt:ro
-      - ../kali/targets_public.txt:/opt/scan/targets_public.txt:ro
+      - AUTO_SCAN=${AUTO_SCAN:-1}
+      - INTERVAL_SEC=${INTERVAL_SEC:-60}
     depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bouclier-net
+
+  # ── Threat Intelligence Injector (feeds ThreatMap2D SSE) ──
+  threat-injector:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: shield-threat-injector
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    command: python /app/threat_injector.py
+    depends_on:
+      - redis
       - backend
     networks:
-      - shield-network
+      - bouclier-net
+
+  # ── DVWA (vulnerable test target) ────────────────
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: shield-dvwa
+    restart: unless-stopped
+    ports:
+      - "30080:80"
+    networks:
+      - bouclier-net
+    environment:
+      - DVWA_RECAPTCHA=disabled
+      - SECURITY_LEVEL=low
+    profiles:
+      - dev
+      - test
+
+  # ── OWASP ZAP Scanner ────────────────────────────
+  zap:
+    image: zaproxy/zap-stable
+    container_name: shield-zap
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+    ports:
+      - "8082:8080"
+    networks:
+      - bouclier-net
+    profiles:
+      - dev
+      - test
+      - full
 
 networks:
-  shield-network:
+  bouclier-net:
     driver: bridge
+  public-net:
+    driver: bridge
+  core-net:
+    driver: bridge
+  offensive-net:
+    driver: bridge
+  ai-net:
+    driver: bridge
+  academy-net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data:

@@ -4,3 +4,7 @@
 backend
 frontend
 dashboard
+db
+tools-api
+ai-pentest
+wiretapper

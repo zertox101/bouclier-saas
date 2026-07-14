@@ -1,13 +1,14 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.sql import EventLog
 from app.models.events import EventIngestRequest, EventLogResponse
 from app.services.stream import publish_event
+from app.services.flow_stream import publish_flow
 from app.services.geoip import get_geoip_cached
 from app.models.monitor import monitor
 
@@ -93,6 +94,22 @@ def ingest_event(payload: EventIngestRequest, db: Session = Depends(require_db))
         })
         if len(monitor.events) > 100:
             monitor.events.pop(0)
+
+        # Also add to monitor.packets (for /map/points endpoint)
+        monitor.packets.append({
+            "id": event.id,
+            "timestamp": event.timestamp.isoformat(),
+            "timestamp_epoch": event.timestamp_epoch,
+            "src_ip": event.src_ip,
+            "dst_ip": dst_ip,
+            "service": event.event_type or "Traffic",
+            "severity": event.severity,
+            "country": src_geo.get("country_name") or src_geo.get("country", {}).get("name") or "Unknown",
+            "lat": src_geo.get("latitude") or src_geo.get("location", {}).get("lat") or 0,
+            "lng": src_geo.get("longitude") or src_geo.get("location", {}).get("lon") or 0,
+        })
+        if len(monitor.packets) > 2000:
+            monitor.packets = monitor.packets[-2000:]
     except Exception as e:
         print(f"Error updating monitor: {e}")
 
@@ -117,6 +134,12 @@ def ingest_event(payload: EventIngestRequest, db: Session = Depends(require_db))
     }
 
     publish_event(stream_payload)
+
+    # Also publish to the threat map 'flows' stream (ThreatMap2D reads this)
+    try:
+        publish_flow(stream_payload)
+    except Exception as e:
+        print(f"Error publishing flow: {e}")
 
     return EventLogResponse(
         id=event.id,
@@ -170,3 +193,44 @@ def list_events(
         )
         for event in events
     ]
+
+@router.get("/events/stream")
+async def stream_events(request: Request):
+    """
+    SSE stream for real-time security events (Threat Feed).
+    """
+    from fastapi.responses import StreamingResponse
+    from app.core.database import redis_client
+    import asyncio
+    import json
+    import os
+
+    FLOW_STREAM_NAME = os.getenv("REDIS_FLOW_STREAM_NAME", "event_stream")
+
+    async def event_generator():
+        stream_id = "$"
+        while True:
+            if await request.is_disconnected():
+                break
+
+            if not redis_client:
+                await asyncio.sleep(5)
+                continue
+
+            entries = redis_client.xread({FLOW_STREAM_NAME: stream_id}, block=5000)
+            if entries:
+                for _, messages in entries:
+                    for message_id, data in messages:
+                        stream_id = message_id
+                        payload = data.get(b"payload")
+                        if payload:
+                            # Re-emit as SSE
+                            yield f"data: {payload.decode()}\n\n"
+            
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+    )

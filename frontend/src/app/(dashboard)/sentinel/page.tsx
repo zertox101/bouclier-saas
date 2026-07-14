@@ -33,7 +33,7 @@ export default function SentinelChatPage() {
     {
       id: "1",
       role: "assistant",
-      content: "NEURAL ENGINE INITIALIZED. Salam, I am Sentinel, your AI Security Analyst. Mrehab bik! Everything looks stable on our end. How can I help you secure the perimeter today?",
+      content: "NEURAL ENGINE INITIALIZED. [STATUS: ELITE]. Salam, I am Sentinel, your AI Cyber Defense Strategist. I have synchronized with the Global Threat Radar and initialized the Red/Blue tactical toolkits. Perimeters are shielding at 100% capacity. How shall we proceed with the mission?",
       timestamp: new Date().toISOString(),
     }
   ]);
@@ -136,13 +136,16 @@ export default function SentinelChatPage() {
 
         <div className="hidden lg:flex items-center gap-6 relative z-10">
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Logic Engine</span>
-            <span className="text-sm font-black text-white">Quantum-V4</span>
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Neural Model</span>
+            <span className="text-sm font-black text-white flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+              GPT-OSS v4.2
+            </span>
           </div>
           <div className="h-8 w-px bg-white/5" />
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Security Layer</span>
-            <span className="text-sm font-black text-cyan-400 uppercase">Shielded</span>
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global Scan Radius</span>
+            <span className="text-sm font-black text-cyan-400 uppercase">Universal</span>
           </div>
         </div>
       </header>
@@ -195,9 +198,42 @@ export default function SentinelChatPage() {
             </div>
           </div>
 
-          <div className="flex-1 rounded-3xl border border-dashed border-white/5 flex flex-col items-center justify-center p-6 text-center opacity-30">
-            <Shield className="h-8 w-8 text-slate-600 mb-2" />
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-600">Secure Environment Sandbox Active</p>
+          {/* Real-time World Attack Feed */}
+          <div className="cyber-panel p-6 bg-slate-950/40 backdrop-blur-xl border-cyan-500/10">
+            <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <Radar className="h-4 w-4 animate-pulse" /> Global Threat Radar
+            </h3>
+            <div className="space-y-4">
+              {[
+                { r: "SE Asia", t: "Mirai Botnet Spike", v: "High" },
+                { r: "Europe", t: "Ransomware (BlackByte)", v: "Critical" },
+                { r: "N. America", t: "Credential Stuffing", v: "Med" },
+                { r: "Global", t: "0-Day VPN Exploit", v: "Systemic" },
+              ].map((threat, i) => (
+                <div key={i} className="group cursor-crosshair">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{threat.r}</span>
+                    <span className={cn(
+                      "text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-widest",
+                      threat.v === "Critical" ? "bg-red-500/10 border-red-500/20 text-red-500" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-500"
+                    )}>{threat.v}</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-white leading-tight group-hover:text-cyan-400 transition-colors uppercase">{threat.t}</p>
+                  <div className="h-0.5 w-full bg-white/5 mt-2 overflow-hidden">
+                    <motion.div
+                      initial={{ x: "-100%" }}
+                      animate={{ x: "100%" }}
+                      transition={{ duration: 3, repeat: Infinity, delay: i * 0.5 }}
+                      className="h-full w-1/3 bg-cyan-500/30"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+              <span className="text-[8px] font-black text-slate-600 uppercase">Signal Stability</span>
+              <span className="text-[8px] font-black text-emerald-400 uppercase">99.8%</span>
+            </div>
           </div>
         </div>
 
@@ -265,7 +301,10 @@ export default function SentinelChatPage() {
                     )}
 
                     <div className="flex items-center gap-2 px-2">
-                      <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">
+                      <span
+                        suppressHydrationWarning
+                        className="text-[9px] font-black text-slate-600 uppercase tracking-widest"
+                      >
                         Transmission_{new Date(msg.timestamp).toLocaleTimeString([], { hour12: false })}
                       </span>
                     </div>

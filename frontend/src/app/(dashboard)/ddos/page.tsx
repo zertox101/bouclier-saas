@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ShieldAlert, ShieldCheck, Activity } from "lucide-react";
 
+import { apiClient } from '@/lib/api-client';
+
 export default function DDoSPage() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
@@ -35,16 +36,10 @@ export default function DDoSPage() {
                 unique_dst_ports: Number(uniqueDstPorts)
             };
 
-            const res = await fetch(`${apiBase}/api/ddos/detect`, {
+            const data = await apiClient('/api/ddos/detect', {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+                json: payload
             });
-
-            if (!res.ok) {
-                throw new Error(`API error ${res.status}`);
-            }
-            const data = await res.json();
             setResult(data);
         } catch (e) {
             setError("Failed to connect to DDoS Service");

@@ -5,27 +5,27 @@ import { Activity, Wifi, Clock, Shield } from 'lucide-react';
 const METRICS = [
     {
         icon: Activity,
-        value: '1.2M+',
-        label: 'Events/sec',
-        description: 'Processing capacity',
+        value: '327K+',
+        label: 'IP Scans/mo',
+        description: 'Enterprise throughput',
     },
     {
         icon: Wifi,
-        value: '500+',
-        label: 'Sensors Online',
-        description: 'Active endpoints',
+        value: '100+',
+        label: 'Global Exit Nodes',
+        description: 'Distributed scanning',
     },
     {
         icon: Clock,
-        value: '<2min',
-        label: 'MTTR',
-        description: 'Mean time to respond',
+        value: 'Real-time',
+        label: 'Streaming API',
+        description: 'Sub-second intelligence',
     },
     {
         icon: Shield,
-        value: '99.8%',
-        label: 'Detection Rate',
-        description: 'Threat accuracy',
+        value: '99.9%',
+        label: 'Uptime SLA',
+        description: 'Enterprise reliability',
     },
 ];
 

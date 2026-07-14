@@ -1,16 +1,62 @@
-services:
+﻿services:
+  # Gateway / Reverse Proxy
+  gateway:
+    build:
+      context: ./infra/gateway
+      dockerfile: Dockerfile
+    container_name: shield-gateway
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - public-net
+      - core-net
+      - ai-net
+      - bouclier-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/log/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
   # Database Layer
   postgres:
     image: postgres:15-alpine
     container_name: bouclier-db
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=shield_db
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASS:-postgres}
+      - POSTGRES_DB=${DB_NAME:-shield_db}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-shield_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - bouclier-net
 
@@ -18,8 +64,14 @@ services:
   redis:
     image: redis:7-alpine
     container_name: bouclier-redis
+    restart: unless-stopped
     ports:
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - bouclier-net
 
@@ -27,12 +79,19 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: bouclier-ai
+    restart: unless-stopped
     ports:
       - "11434:11434"
     environment:
       - OLLAMA_HOST=0.0.0.0
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - bouclier-net
 
@@ -42,32 +101,48 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: bouclier-api
+    restart: unless-stopped
     ports:
       - "8005:8005"
     volumes:
-      - ./backend:/code
+      - ./backend:/app
       - ./geoip:/geoip
+      - ./mythos-launch-response-master:/app/mythos-launch-response-master
     environment:
-      - ENVIRONMENT=production
-      - DB_USER=postgres
-      - DB_PASS=postgres
+      - ENVIRONMENT=${NODE_ENV:-production}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
       - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=shield_db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-shield_db}
       - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - LLM_PROVIDER=ollama
-      - LLM_BASE_URL=http://ollama:11434
-      - LLM_MODEL=llama3.2:3b
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
       - GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
       - GEOIP_ASN_DB=/geoip/GeoLite2-ASN.mmdb
+      - OFFENSIVE_MODE=true
+      - SAFE_MODE=false
+      - ALLOW_EXTERNAL_TARGETS=true
+      - MAX_SCAN_SCOPE=10.0.0.0/24
+      - TOOLS_API_URL=http://tools-api:8100
+      - TOOLS_API_SECRET=${TOOLS_API_SECRET:-}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - DEFAULT_ADMIN_USERNAME=${ADMIN_USER:-admin}
+      - DEFAULT_ADMIN_EMAIL=${ADMIN_EMAIL:-admin@bouclier.local}
+      - DEFAULT_ADMIN_PASSWORD=${ADMIN_PASS:-bouclier2026!}
     depends_on:
       - postgres
       - redis
       - ollama
+      - qdrant
     networks:
       - bouclier-net
       - academy-net
+      - ai-net
 
   # Tools Execution API
   tools-api:
@@ -75,6 +150,7 @@ services:
       context: .
       dockerfile: tools-api/Dockerfile
     container_name: bouclier-tools
+    restart: unless-stopped
     ports:
       - "8100:8100"
     volumes:
@@ -85,6 +161,9 @@ services:
       - TOOLS_ENABLE_WEB_SCANNER=1
       - TOOLS_REQUIRE_PRIVATE=0
       - TOOLS_ALLOW_PUBLIC_TARGETS=1
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://ollama:11434}
+      - LLM_MODEL=${LLM_MODEL:-llama3.2:3b}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -98,7 +177,7 @@ services:
     container_name: bouclier-zap
     command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
     ports:
-      - "8081:8080"
+      - "8082:8080"
     networks:
       - bouclier-net
 
@@ -107,14 +186,17 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8005
+        NEXT_PUBLIC_TOOLS_API_BASE: http://localhost:8005
     container_name: bouclier-gui
     ports:
-      - "3002:3000"
+      - "8080:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8005
-      - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost:8100
-      - NEXTAUTH_SECRET=bouclier_super_secret_key_2026_change_me
-      - NEXTAUTH_URL=http://localhost:3002
+      - INTERNAL_API_URL=http://backend:8005
+      - BACKEND_URL=http://backend:8005
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-default_dev_secret_change_me}
+      - NEXTAUTH_URL=http://localhost:8080
     depends_on:
       - backend
     networks:
@@ -148,10 +230,110 @@ services:
     networks:
       - bouclier-net
 
+  # RAPTOR (Autonomous Security Research Framework)
+  raptor:
+    build:
+      context: ./services/raptor
+      dockerfile: Dockerfile
+    container_name: bouclier-raptor
+    restart: always
+    privileged: true
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./raptor-data:/app/out:rw
+      - ./raptor-logs:/app/logs:rw
+      - ./infra/logs:/app/infra-logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - core-net
+      - ai-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 6GB
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # Threat Intelligence Feed (feeds real-time data to ThreatMap2D / map/stream SSE)
+  threat-injector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bouclier-threat-injector
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    command: python /app/threat_injector.py
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - bouclier-net
+
+  # Vulnerable target for testing exploitation pipeline
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: bouclier-dvwa
+    restart: unless-stopped
+    ports:
+      - "30080:80"
+    networks:
+      - bouclier-net
+    environment:
+      - DVWA_RECAPTCHA=disabled
+      - SECURITY_LEVEL=low
+
+  # Real-time network sniffer (captures live traffic → /events/ingest)
+  live-sniffer:
+    build:
+      context: ./tools/adversary-emulation/engine
+      dockerfile: Dockerfile.sniffer
+    container_name: bouclier-sniffer
+    restart: unless-stopped
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - API_URL=http://localhost:8005/api/events/ingest
+      - SNIFFER_MODE=real
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Vector Database for semantic CVE/MITRE search
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: bouclier-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - ai-net
+
 networks:
   bouclier-net:
     driver: bridge
-
+  public-net:
+    driver: bridge
+  core-net:
+    driver: bridge
+  offensive-net:
+    driver: bridge
+  ai-net:
+    driver: bridge
   academy-net:
     driver: bridge
     internal: true
@@ -159,3 +341,4 @@ networks:
 volumes:
   postgres_data:
   ollama_data:
+  qdrant_data:

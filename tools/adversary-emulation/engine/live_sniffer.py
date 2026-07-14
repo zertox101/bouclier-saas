@@ -14,6 +14,7 @@ from threading import Thread
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 API_URL = os.getenv("API_URL", "http://localhost:8005/api/events/ingest")
+SNIFFER_MODE = os.getenv("SNIFFER_MODE", "auto")  # auto | real
 BATCH_SIZE = 5
 FLUSH_INTERVAL = 1.0
 
@@ -144,8 +145,14 @@ def sniff():
     except OSError as e:
         print(f"[!] Error: {e}")
         print("[!] Raw Sockets require Administrator privileges.")
+        
+        if SNIFFER_MODE == "real":
+            print("[!] SNIFFER_MODE=real — no synthetic fallback. Exiting.")
+            sys.exit(1)
+        
         print("[*] Switching to HIGH-FIDELITY EMULATION mode to ensure dashboard functionality.")
         print("[*] To see REAL traffic, please restart your terminal as Administrator.")
+        print("[*] Set SNIFFER_MODE=real to disable this fallback.")
         
         while True:
             process_synthetic_packet()

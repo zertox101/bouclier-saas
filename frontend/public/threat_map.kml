@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Sample Threat Vector Map</name>
+    <description>Placeholder live attack locations for demo purposes.</description>
+    <Style id="threatIcon">
+      <IconStyle>
+        <scale>1.2</scale>
+        <icon>
+          <href>http://maps.google.com/mapfiles/kml/pushpin/red-pushpin.png</href>
+        </icon>
+      </IconStyle>
+    </Style>
+    <Placemark>
+      <name>Malware Injection – Paris</name>
+      <description>Detected malware traffic targeting French ISP.</description>
+      <styleUrl>#threatIcon</styleUrl>
+      <Point>
+        <coordinates>2.3522,48.8566,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>DDoS Attack – New York</name>
+      <description>Large‑scale DDoS observed on NY data center.</description>
+      <styleUrl>#threatIcon</styleUrl>
+      <Point>
+        <coordinates>-74.0060,40.7128,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Phishing Campaign – Tokyo</name>
+      <description>Phishing emails originating from Japanese IP range.</description>
+      <styleUrl>#threatIcon</styleUrl>
+      <Point>
+        <coordinates>139.6917,35.6895,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Ransomware – São Paulo</name>
+      <description>Ransomware activity detected in Brazilian network.</description>
+      <styleUrl>#threatIcon</styleUrl>
+      <Point>
+        <coordinates>-46.6333,-23.5505,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

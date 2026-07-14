@@ -3,6 +3,8 @@ import socket
 import logging
 import requests
 import json
+import time
+from typing import Optional
 from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -11,8 +13,8 @@ from app.models.scans_sql import ScanJob, Finding
 # Configure logger
 logger = logging.getLogger(__name__)
 
-TOOLS_API_URL = "http://tools-api:8100"
-ZAP_URL = "http://zap:8080" # Using container name from docker-compose
+TOOLS_API_URL = "http://localhost:8100"
+ZAP_URL = "http://localhost:8080"
 
 class ScanManager:
     
@@ -50,7 +52,7 @@ class ScanManager:
             return False
 
     @staticmethod
-    def create_scan(db: Session, target: str, tool: str, user_id: str = None) -> ScanJob:
+    def create_scan(db: Session, target: str, tool: str, user_id: str = None, org_id: Optional[str] = None) -> ScanJob:
         # 1. Security Check
         # Allow disabling check via env var for testing if needed, but per requirements default is strict
         # For now, simplistic implementation
@@ -59,6 +61,7 @@ class ScanManager:
 
         # 2. Create DB Record
         scan = ScanJob(
+            org_id=org_id,
             tool=tool,
             target=target,
             status="pending",
@@ -122,6 +125,7 @@ class ScanManager:
             for alert in alerts:
                 # Deduplication logic could go here
                 finding = Finding(
+                    org_id=scan.org_id,
                     scan_job_id=scan.id,
                     severity=alert.get('risk', 'info').lower(),
                     title=alert.get('alert'),
@@ -166,6 +170,7 @@ class ScanManager:
                         if "[" in msg and "]" in msg:
                             # Mock parsing: [info] [cve-2021-...] ...
                             finding = Finding(
+                                org_id=scan.org_id,
                                 scan_job_id=scan.id,
                                 severity="high" if "high" in msg.lower() else "medium" if "medium" in msg.lower() else "low",
                                 title=f"Nuclei Finding: {msg[:50]}...",

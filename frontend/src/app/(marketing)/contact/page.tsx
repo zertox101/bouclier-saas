@@ -20,7 +20,7 @@ export default function ContactPage() {
                             {[
                                 { title: "Sales Support", details: "sales@bouclier.com", icon: Mail },
                                 { title: "Technical Desk", details: "+1 (888) SEC-SOC1", icon: Phone },
-                                { title: "Global Hub", details: "Cyber District, Paris", icon: MapPin },
+                                { title: "Global Hub", details: "Cyber District, Casablanca", icon: MapPin },
                                 { title: "Live Response", details: "Average under 5m", icon: MessageSquare }
                             ].map(item => (
                                 <div key={item.title} className="flex flex-col gap-4 group">

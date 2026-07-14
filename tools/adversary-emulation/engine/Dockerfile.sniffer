@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY live_sniffer.py .
+
+RUN pip install requests --no-cache-dir
+
+CMD ["python", "-u", "live_sniffer.py"]

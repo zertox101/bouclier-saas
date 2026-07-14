@@ -1,6 +1,9 @@
-import dynamic from 'next/dynamic';
-const ThreatMapPro = dynamic(() => import('@/components/ThreatMapPro'), { ssr: false });
+import ThreatMapProClient from "../../../components/dashboard/ThreatMapProClient";
 
 export default function ThreatMapProPage() {
-    return <ThreatMapPro />;
+    return (
+        <div className="w-full min-h-screen bg-black text-white p-4">
+            <ThreatMapProClient />
+        </div>
+    );
 }

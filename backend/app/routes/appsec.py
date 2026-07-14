@@ -8,6 +8,8 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.models.appsec_sql import AppSecSession, AppSecRequest, AppSecFinding
+from app.models.sql import User
+from app.routes.auth import get_current_user
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/appsec", tags=["AppSec / Burp Integration"])
@@ -40,11 +42,12 @@ async def import_appsec_session(
     file: UploadFile = File(...),
     name: str = "Imported Session",
     tool: str = "BURP",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Retrieve user org context (mock for now)
-    org_id = "default"
-    user_id = "user_1"
+    # Retrieve user org context
+    org_id = current_user.org_id
+    user_id = str(current_user.id)
     
     # Create Session
     session = AppSecSession(
@@ -87,9 +90,9 @@ async def import_appsec_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/sessions")
-def list_sessions(db: Session = Depends(get_db)):
-    # Filter by org_id in real implementation
-    return db.query(AppSecSession).filter(AppSecSession.org_id == "default").order_by(AppSecSession.created_at.desc()).all()
+def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Filter by org_id
+    return db.query(AppSecSession).filter(AppSecSession.org_id == current_user.org_id).order_by(AppSecSession.created_at.desc()).all()
 
 @router.get("/sessions/{session_id}")
 def get_session_details(session_id: int, db: Session = Depends(get_db)):

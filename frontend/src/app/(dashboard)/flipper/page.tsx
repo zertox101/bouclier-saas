@@ -2,38 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-    Wifi,
-    Rss,
-    Zap,
-    Smartphone,
-    Radio,
-    Cpu,
-    Activity,
-    Terminal,
-    Play,
-    Square,
-    RefreshCw,
-    Shield,
-    Lock,
-    Eye,
-    Database,
-    FileCode,
-    Settings,
-    Globe,
-    Monitor,
-    HardDrive,
-    Download,
-    AlertTriangle,
-    Flame,
-    Binary,
-    Layers,
-    Container,
-    Usb,
-    ChevronRight,
-    Plus
+    Wifi, Rss, Zap, Smartphone, Radio, Cpu, Activity, Terminal,
+    Play, Square, RefreshCw, Shield, Lock, Eye, Database,
+    FileCode, Settings, Globe, Monitor, HardDrive, Download,
+    AlertTriangle, Flame, Binary, Layers, ChevronRight, Plus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 
 // --- Types ---
 
@@ -63,14 +39,6 @@ interface Payload {
 
 // --- Constants ---
 
-const TOP_STATS = [
-    { label: "Docker CPU", value: "1.2%", color: "text-cyan-400" },
-    { label: "Memory", value: "256MB", color: "text-purple-400" },
-    { label: "Active Containers", value: "2", color: "text-emerald-400" },
-    { label: "Detected Signals", value: "12", color: "text-amber-400" },
-    { label: "WiFi Range", value: "45m", color: "text-blue-400" },
-];
-
 const PAYLOAD_LIBRARY: Payload[] = [
     { id: "1", name: "PassGrabber", description: "Collects WiFi passwords and browser credentials.", category: "Credential", os: "Windows" },
     { id: "2", name: "ReverseShell", description: "Establishes a persistent reverse connection to C2 server.", category: "Exfiltration", os: "Linux" },
@@ -92,8 +60,26 @@ export default function FlipperDashboard() {
     const [cpuUsage, setCpuUsage] = useState(1.2);
     const [isRunning, setIsRunning] = useState(false);
     const [activeJobId, setActiveJobId] = useState<string | null>(null);
+    const [stats, setStats] = useState<any[]>([
+        { label: "Docker CPU", value: "1.2%", color: "text-cyan-400" },
+        { label: "Memory", value: "256MB", color: "text-purple-400" },
+        { label: "Active Containers", value: "2", color: "text-emerald-400" },
+        { label: "Detected Signals", value: "12", color: "text-amber-400" },
+        { label: "WiFi Range", value: "45m", color: "text-blue-400" },
+    ]);
     const terminalEndRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        apiClient("/api/flipper/stats").then((d: any) => {
+            if (d) setStats([
+                { label: "Active Sessions", value: String(d.active_sessions), color: "text-cyan-400" },
+                { label: "Payloads", value: String(d.total_payloads), color: "text-purple-400" },
+                { label: "Deployments Today", value: String(d.deployments_today), color: "text-emerald-400" },
+                { label: "Success Rate", value: d.success_rate, color: "text-blue-400" },
+            ]);
+        }).catch(() => {});
+    }, []);
 
     // --- Functions ---
 
@@ -352,8 +338,8 @@ export default function FlipperDashboard() {
 
             {/* Stats Bar */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {TOP_STATS.map((s, i) => (
-                    <StatPanel key={i} label={s.label} value={i === 0 ? `${cpuUsage.toFixed(1)}%` : s.value} color={s.color} />
+                {stats.map((s, i) => (
+                    <StatPanel key={i} label={s.label} value={s.value} color={s.color} />
                 ))}
             </div>
 

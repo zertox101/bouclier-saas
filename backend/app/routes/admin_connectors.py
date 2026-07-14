@@ -1,14 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.core.database import get_db
+from app.core.security import decode_access_token
 from app.models.connectors_sql import SQLConnector
+from app.models.sql import User
 from app.services.sql_connector_service import SQLConnectorService
 from app.utils.crypto import encrypt_secret
+from app.routes.auth import oauth2_scheme_optional
 from pydantic import BaseModel
 from datetime import datetime
 
 router = APIRouter()
+
+
+def _resolve_connector_org_id(request: Request, token: Optional[str] = None) -> str:
+    org_id = request.headers.get("X-Organization-ID")
+    if org_id:
+        return org_id
+    if token:
+        try:
+            payload = decode_access_token(token)
+            if payload and payload.get("org_id"):
+                return payload["org_id"]
+        except Exception:
+            pass
+    return "default"
 
 class SQLConnectorCreate(BaseModel):
     name: str
@@ -42,9 +59,8 @@ class QueryRequest(BaseModel):
     params: Dict[str, Any] = {}
 
 @router.post("/connectors/sql", response_model=SQLConnectorResponse)
-def create_connector(payload: SQLConnectorCreate, db: Session = Depends(get_db)):
-    # org_id would normally come from current_user
-    org_id = "default" 
+def create_connector(payload: SQLConnectorCreate, request: Request, db: Session = Depends(get_db), token: Optional[str] = Depends(oauth2_scheme_optional)):
+    org_id = _resolve_connector_org_id(request, token)
     
     new_connector = SQLConnector(
         org_id=org_id,

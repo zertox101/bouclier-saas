@@ -10,9 +10,10 @@ services:
       - bouclier-net
     ports: [] # Remove host port exposure
     environment:
-      - CORS_ORIGINS=https://bouclier.local
-      - COOKIE_DOMAIN=bouclier.local
+      - CORS_ORIGINS=https://localhost
+      - COOKIE_DOMAIN=localhost
       - COOKIE_SECURE=true
+      - API_URL=http://backend:8005
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8005/health" ]
       interval: 10s
@@ -22,7 +23,7 @@ services:
       - "traefik.enable=true"
 
       # API Router (with path prefix)
-      - "traefik.http.routers.bouclier-api.rule=Host(`bouclier.local`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.bouclier-api.rule=Host(`localhost`) && (PathPrefix(`/api`) || PathPrefix(`/alerts`) || PathPrefix(`/events`) || PathPrefix(`/analysis`) || PathPrefix(`/ws`))"
       - "traefik.http.routers.bouclier-api.entrypoints=websecure"
       - "traefik.http.routers.bouclier-api.tls=true"
       - "traefik.http.routers.bouclier-api.service=bouclier-api"
@@ -40,13 +41,17 @@ services:
       - bouclier-net
     ports: [] # Remove host port exposure
     environment:
-      - NEXT_PUBLIC_API_URL=https://bouclier.local
-      - NEXT_PUBLIC_TOOLS_API_BASE=https://bouclier.local/tools
+      - NEXT_PUBLIC_API_URL=//localhost
+      - NEXT_PUBLIC_WS_URL=ws://localhost
+      - NEXT_PUBLIC_TOOLS_API_URL=//localhost/tools
+      - NEXT_PUBLIC_TOOLS_API_BASE=//localhost/tools
+      - NEXTAUTH_URL=https://localhost
+      - NEXTAUTH_SECRET=bouclier_super_secret_key_2026_change_me
     labels:
       - "traefik.enable=true"
 
       # Frontend Router (catch-all for SPA/Next.js)
-      - "traefik.http.routers.bouclier-frontend.rule=Host(`bouclier.local`)"
+      - "traefik.http.routers.bouclier-frontend.rule=Host(`localhost`)"
       - "traefik.http.routers.bouclier-frontend.entrypoints=websecure"
       - "traefik.http.routers.bouclier-frontend.tls=true"
       - "traefik.http.routers.bouclier-frontend.priority=1"
@@ -70,7 +75,7 @@ services:
       - "traefik.enable=true"
 
       # Tools API Router
-      - "traefik.http.routers.bouclier-tools.rule=Host(`bouclier.local`) && PathPrefix(`/tools`)"
+      - "traefik.http.routers.bouclier-tools.rule=Host(`localhost`) && PathPrefix(`/tools`)"
       - "traefik.http.routers.bouclier-tools.entrypoints=websecure"
       - "traefik.http.routers.bouclier-tools.tls=true"
       - "traefik.http.routers.bouclier-tools.service=bouclier-tools"
@@ -83,6 +88,23 @@ services:
       - "traefik.http.services.bouclier-tools.loadbalancer.server.port=8100"
       - "traefik.http.services.bouclier-tools.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.bouclier-tools.loadbalancer.healthcheck.interval=10s"
+
+  worldmonitor:
+    build:
+      context: ../worldmonitor
+      dockerfile: Dockerfile
+    container_name: worldmonitor-ui
+    networks:
+      - proxy
+      - bouclier-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.worldmonitor.rule=Host(`monitor.localhost`)"
+      - "traefik.http.routers.worldmonitor.entrypoints=websecure"
+      - "traefik.http.routers.worldmonitor.tls=true"
+      - "traefik.http.routers.worldmonitor.service=worldmonitor"
+      - "traefik.http.routers.worldmonitor.middlewares=security-headers,compression"
+      - "traefik.http.services.worldmonitor.loadbalancer.server.port=8080"
 
   # Remove redirector service (not needed with Traefik)
   redirector:

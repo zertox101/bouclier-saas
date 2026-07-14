@@ -5,75 +5,88 @@ import platform
 import socket
 import json
 import random
+import threading
 from datetime import datetime
+from scapy.all import sniff, IP, TCP, UDP
+import redis
+import os
 
 # Configuration
-API_URL = "http://localhost:8005/api/traffic/live"
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+FLOW_STREAM_NAME = "flows"
 AGENT_ID = f"agent-{platform.node()}"
 
-def get_system_metrics():
-    return {
-        "cpu": psutil.cpu_percent(),
-        "memory": psutil.virtual_memory().percent,
-        "disk": psutil.disk_usage('/').percent,
-        "network_sent": psutil.net_io_counters().bytes_sent,
-        "network_recv": psutil.net_io_counters().bytes_recv
-    }
+# Connect to local Redis for direct injection
+try:
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0)
+    print(f"[*] Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
+except Exception as e:
+    print(f"[!] Redis connection failed: {e}")
+    r = None
 
-def collect_logs():
-    """Simulate log collection (e.g. from /var/log/syslog or Event Viewer)"""
-    # In a real agent, this would tail files. Here we simulate 'events'
-    events = []
-    
-    # Randomly generate suspicious activity
-    if random.random() < 0.1: # 10% chance
-        events.append({
-            "source": "SystemGuard",
-            "type": "Unauthorized Access Attempt",
-            "details": f"Failed login for root from {random.randint(1,255)}.{random.randint(1,255)}.0.1"
-        })
-    
-    return events
-
-def run_agent():
-    print(f"[*] SHIELD Agent {AGENT_ID} started...")
-    print(f"[*] Reporting to {API_URL}")
-    
-    while True:
-        try:
-            # 1. Collect Metrics
-            metrics = get_system_metrics()
-            
-            # 2. Collect Logs
-            logs = collect_logs()
-            
-            # 3. Network Scan (Local)
-            # In a real agent, we might use scapy or generic netstat
-            # For this demo, we rely on the server's existing scanner logic
-            # but we could send local view up.
-            
-            payload = {
+def packet_callback(pkt):
+    """Analyze real network packets and push to the Threat Map."""
+    if IP in pkt:
+        src_ip = pkt[IP].src
+        dst_ip = pkt[IP].dst
+        protocol = "TCP" if TCP in pkt else ("UDP" if UDP in pkt else "OTHER")
+        
+        # We only care about external traffic for the map (not localhost loopback)
+        if not src_ip.startswith("127.") and not dst_ip.startswith("127."):
+            flow = {
+                "timestamp_epoch": time.time(),
                 "agent_id": AGENT_ID,
-                "timestamp": datetime.now().isoformat(),
-                "metrics": metrics,
-                "logs": logs
+                "src_ip": src_ip,
+                "dst_ip": dst_ip,
+                "protocol": protocol,
+                "length": len(pkt),
+                "severity": "low", # Default, server will escalate if needed
+                "rule_id": "REAL_TIME_TRAFFIC",
+                "dst_lat": 31.7917, # Your SOC Location (Morocco)
+                "dst_lon": -7.0926
             }
             
-            # 4. Report to C2 (Server)
-            # Currently our API expects 'live traffic' trigger, but we should add a dedicated agent endpoint.
-            # For now, we will hit the existing traffic endpoint to trigger the 'scan_network_connections' 
-            # on the server side + logic, effectively acting as a heartbeat.
-            response = requests.get(API_URL) 
+            # Push to Redis for immediate display on Map
+            if r:
+                r.xadd(FLOW_STREAM_NAME, {"payload": json.dumps(flow)}, maxlen=1000)
+
+def start_sniffing():
+    print("[*] Starting Packet Sniffer on default interface...")
+    sniff(prn=packet_callback, store=0)
+
+def run_heartbeat():
+    print(f"[*] SHIELD Heartbeat {AGENT_ID} started...")
+    while True:
+        try:
+            metrics = {
+                "cpu": psutil.cpu_percent(),
+                "memory": psutil.virtual_memory().percent,
+                "agent_id": AGENT_ID,
+                "status": "ONLINE"
+            }
+            # Report system health to Redis
+            if r:
+                r.hset(f"agent:health:{AGENT_ID}", mapping=metrics)
+                r.expire(f"agent:health:{AGENT_ID}", 60) # TTL for health
             
-            if response.status_code == 200:
-                print(f"[+] Heartbeat sent. Server: {response.json().get('total')} packets.")
-            else:
-                print(f"[-] Heartbeat failed: {response.status_code}")
-                
-        except Exception as e:
-            print(f"[!] Agent Error: {e}")
-            
-        time.sleep(5)
+            # Trigger backend processing
+            requests.get("http://backend:8005/api/traffic/live")
+        except:
+            pass
+        time.sleep(10)
 
 if __name__ == "__main__":
-    run_agent()
+    print("""
+    🛡️ BOUCLIER - PRO SECURITY AGENT
+    ===============================
+    Agent ID: {0}
+    Mode: Real-time Packet Inspection
+    """.format(AGENT_ID))
+    
+    # Start Sniffer in a background thread
+    sniff_thread = threading.Thread(target=start_sniffing, daemon=True)
+    sniff_thread.start()
+    
+    # Run Heartbeat in main thread
+    run_heartbeat()

@@ -9,6 +9,9 @@
 - **ping** - ICMP echo request utility
 - **traceroute** - Network path tracing
 - **hping3** - Advanced packet crafting tool
+- **dnsrecon** ✨ NEW - DNS enumeration and zone transfer
+- **netdiscover** ✨ NEW - Active/passive ARP reconnaissance
+- **unicornscan** ✨ NEW - High-speed asynchronous TCP/UDP scanner
 
 ### Network Analysis & Monitoring
 - **tcpdump** - Packet capture and analysis
@@ -16,6 +19,8 @@
 - **ngrep** ✨ NEW - Network grep for pattern matching
 - **iftop** ✨ NEW - Real-time bandwidth monitoring
 - **nethogs** ✨ NEW - Per-process network usage tracking
+- **ettercap** ✨ NEW - Network sniffer/interceptor (CLI)
+- **bettercap** ✨ NEW - Advanced network monitoring & manipulation
 
 ### Web Application Security
 - **nikto** - Web server vulnerability scanner
@@ -25,6 +30,7 @@
 - **sqlmap** - SQL injection detection and exploitation
 - **wapiti** ✨ NEW - Web application vulnerability scanner
 - **nuclei** ✨ NEW - Modern vulnerability scanner with templates
+- **w3af** ✨ NEW - Web application attack and audit framework
 
 ### SSL/TLS Security
 - **openssl** - SSL/TLS toolkit
@@ -35,6 +41,9 @@
 - **exploitdb** ✨ NEW - Exploit database
 - **crackmapexec** ✨ NEW - Network pentesting Swiss army knife
 - **hydra** - Network login cracker
+- **medusa** ✨ NEW - Parallel network login cracker
+- **patator** ✨ NEW - Multi-purpose brute-force tool
+- **setoolkit** ✨ NEW - Social Engineering Toolkit
 
 ### OSINT & Reconnaissance
 - **whois** - Domain registration lookup
@@ -42,6 +51,7 @@
 - **recon-ng** ✨ NEW - Full-featured reconnaissance framework
 - **amass** ✨ NEW - In-depth DNS enumeration
 - **subfinder** ✨ NEW - Subdomain discovery tool
+- **cewl** ✨ NEW - Custom wordlist generator
 
 ### Password Auditing
 - **john** ✨ NEW - John the Ripper password cracker
@@ -51,11 +61,21 @@
 ### Wireless Security
 - **aircrack-ng** ✨ NEW - Wireless network security suite
 - **wifite** ✨ NEW - Automated wireless attack tool
+- **reaver** ✨ NEW - WPS brute-force tool
+- **pixiewps** ✨ NEW - Offline WPS pin cracker
+- **kismet** ✨ NEW - Wireless network sniffer
 
 ### Forensics & Malware Analysis
 - **binwalk** ✨ NEW - Firmware analysis tool
 - **foremost** ✨ NEW - File carving tool
 - **yara** ✨ NEW - Pattern matching for malware research
+
+### Binary Exploitation & Reverse Engineering
+- **radare2** ✨ NEW - Advanced reverse engineering framework
+- **pwntools** ✨ NEW - CTF framework and exploit development library
+- **checksec** ✨ NEW - Check binary security features
+- **searchsploit** ✨ NEW - Search Exploit-DB for known exploits
+- **androguard** ✨ NEW - Static analysis of APKs
 
 ### Network Utilities
 - **curl** - HTTP client

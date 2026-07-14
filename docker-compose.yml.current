@@ -1,0 +1,519 @@
+services:
+  # Ã¢â€â‚¬Ã¢â€â‚¬ SECURITY GATEWAY (Nginx WAF/Reverse Proxy) Ã¢â€â‚¬Ã¢â€â‚¬
+  gateway:
+    build:
+      context: ./infra/gateway
+      dockerfile: Dockerfile
+    container_name: shield-gateway
+    restart: always
+    ports:
+      - "8081:80"
+    networks:
+      - public-net
+      - core-net
+      - ai-net
+      - bouclier-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ SECURITY CONTROL PLANE (PEP) Ã¢â€â‚¬Ã¢â€â‚¬
+  control-plane:
+    build:
+      context: ./services/control-plane
+      dockerfile: Dockerfile
+    container_name: shield-control-plane
+    restart: always
+    env_file:
+      - .env.core
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASS:-shield_pass}@db:5432/${DB_NAME:-bouclier}
+      - REDIS_URL=redis://redis:6379/0
+      - LLM_BASE_URL=http://ai-gateway:8200
+      - TOOLS_API_URL=http://tools-api:8100
+    networks:
+      - core-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ GOTHAM FRONTEND (Next.js) Ã¢â€â‚¬Ã¢â€â‚¬
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: shield-frontend-ui
+    restart: always
+    ports:
+      - "8080:3000"
+    env_file:
+      - .env.app
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+      - NEXT_PUBLIC_TOOLS_API_BASE=http://localhost/agent
+    networks:
+      - public-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ CORE BACKEND (FastAPI/Postgres) Ã¢â€â‚¬Ã¢â€â‚¬
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shield-backend-api
+    restart: always
+    ports:
+      - "8005:8005"
+    env_file:
+      - .env.core
+      - .env.ai
+      - .env.offensive
+      - .env.app
+    volumes:
+      - ./data:/app/data
+      - ./infra/logs:/app/logs
+      - ./mythos-launch-response-master:/mythos-launch-response-master:ro
+      - ./backend/app/ml/data:/app/app/ml/data:ro
+    networks:
+      - core-net
+      - public-net
+      - ai-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-gateway:
+        condition: service_healthy
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ AI GATEWAY (Secure Orchestration Layer) Ã¢â€â‚¬Ã¢â€â‚¬
+  ai-gateway:
+    build:
+      context: ./infra/ai-gateway
+      dockerfile: Dockerfile
+    container_name: shield-ai-gateway
+    restart: always
+    environment:
+      - LLM_BACKEND_URL=http://ollama:11434
+    networks:
+      - ai-net
+      - core-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ AI ENGINE (Ollama Containerized) Ã¢â€â‚¬Ã¢â€â‚¬
+  ollama:
+    image: ollama/ollama:latest
+    container_name: shield-ollama-core
+    restart: always
+    networks:
+      - ai-net
+      - core-net
+    volumes:
+      - ./infra/ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G # AI models need more RAM
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ OFFENSIVE ENGINE (Kali Linux / Uvicorn) Ã¢â€â‚¬Ã¢â€â‚¬
+  tools-api:
+    build:
+      context: ./
+      dockerfile: tools-api/Dockerfile
+    container_name: shield-tools-engine
+    restart: always
+    ports:
+      - "8100:8100"
+    env_file:
+      - .env.core
+      - .env.ai
+      - .env.offensive
+      - .env.app
+    volumes:
+      - ./data:/app/data
+      - ./infra/logs:/app/logs
+      - ./mythos-launch-response-master:/opt/mythos-launch-response-master:ro
+      - ./tools-api/mythos_scripts:/opt/tools-api/mythos_scripts:ro
+    networks:
+      - offensive-net
+      - core-net
+      - ai-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ REDHOUND PRO (Offensive Engine) Ã¢â€â‚¬Ã¢â€â‚¬
+  redhound:
+    build:
+      context: ./services/redhound-pro
+      dockerfile: Dockerfile
+    container_name: shield-redhound-pro
+    restart: always
+    networks:
+      - offensive-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ AI PENTESTER TOOL (Autonomous Agent) Ã¢â€â‚¬Ã¢â€â‚¬
+  ai-pentest:
+    build:
+      context: ./services/ai-pentester
+      dockerfile: Dockerfile
+    container_name: shield-ai-pentester
+    restart: always
+    ports:
+      - "9100:9100"
+    networks:
+      - offensive-net
+      - core-net
+      - ai-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ WIRETAPPER OSINT (Signal Intelligence) Ã¢â€â‚¬Ã¢â€â‚¬
+  wiretapper:
+    build:
+      context: ./services/wiretapper
+      dockerfile: Dockerfile
+    container_name: shield-wiretapper
+    restart: always
+    env_file:
+      - ./services/wiretapper/.env
+    networks:
+      - offensive-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ REDIS REST PROXY (for World Monitor) Ã¢â€â‚¬Ã¢â€â‚¬
+  redis-rest:
+    build:
+      context: ./services/worldmonitor/docker
+      dockerfile: Dockerfile.redis-rest
+    container_name: shield-redis-rest
+    restart: always
+    environment:
+      SRH_TOKEN: "wm-local-token"
+      SRH_CONNECTION_STRING: "redis://redis:6379"
+    networks:
+      - core-net
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ TACTICAL GLOBAL MONITORING (World Monitor) Ã¢â€â‚¬Ã¢â€â‚¬
+  worldmonitor:
+    build:
+      context: ./services/worldmonitor
+      dockerfile: Dockerfile
+    container_name: shield-world-monitor
+    restart: always
+    environment:
+      - UPSTASH_REDIS_REST_URL=http://redis-rest:80
+      - UPSTASH_REDIS_REST_TOKEN=wm-local-token
+    networks:
+      - core-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      - redis-rest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ KALI CONTINUOUS SCANNER (Network Auditor) Ã¢â€â‚¬Ã¢â€â‚¬
+  kali-scanner:
+    build:
+      context: ./kali
+      dockerfile: Dockerfile
+    container_name: shield-kali-scanner
+    restart: always
+    environment:
+      - API_URL=http://backend:8005/api/telemetry/events
+      - TARGETS_FILE=/opt/scan/targets.txt
+      - SRC_IP=10.0.0.50
+    volumes:
+      - ./kali/targets.txt:/opt/scan/targets.txt:ro
+    networks:
+      - offensive-net
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    depends_on:
+      backend:
+        condition: service_started
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ MEMORY LAYER (Vector DB) Ã¢â€â‚¬Ã¢â€â‚¬
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: shield-qdrant
+    restart: always
+    volumes:
+      - ./infra/qdrant_data:/qdrant/storage
+    networks:
+      - core-net
+      - ai-net
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/localhost/6333"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ MULTI-AGENT WORKER CORE Ã¢â€â‚¬Ã¢â€â‚¬
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shield-worker
+    restart: always
+    command: celery -A app.core.celery_app worker --loglevel=info
+    env_file:
+      - .env.core
+      - .env.ai
+      - .env.offensive
+      - .env.app
+    networks:
+      - core-net
+      - ai-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1.5G
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ DATABASE (PostgreSQL) Ã¢â€â‚¬Ã¢â€â‚¬
+  db:
+    image: postgres:15-alpine
+    container_name: shield-db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=bouclier_user
+      - POSTGRES_PASSWORD=bouclier_password_prod
+      - POSTGRES_DB=bouclier_data
+    volumes:
+      - ./infra/postgres_data:/var/lib/postgresql/data
+    networks:
+      - core-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ CACHE LAYER (Redis) Ã¢â€â‚¬Ã¢â€â‚¬
+  redis:
+    image: redis:7-alpine
+    container_name: shield-redis
+    restart: always
+    networks:
+      - core-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  # -- RAPTOR (Autonomous Security Research Framework) --
+  raptor:
+    build:
+      context: ./services/raptor
+      dockerfile: Dockerfile
+    container_name: bouclier-raptor
+    restart: always
+    privileged: true  # Required for rr deterministic debugger
+    cap_add:
+      - SYS_PTRACE  # For debugging capabilities
+    security_opt:
+      - seccomp:unconfined  # Needed for some tools
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ANTHROPIC_API_KEY=  # Set your Anthropic API key here
+      - OPENAI_API_KEY=  # Set your OpenAI API key here if needed
+    volumes:
+      - ./raptor-data:/app/out:rw  # Persistent storage for findings, reports, etc.
+      - ./raptor-logs:/app/logs:rw  # Log storage
+      - ./infra/logs:/app/infra-logs:ro  # Read-only access to infra logs if needed
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container operations (if needed)
+    networks:
+      - core-net
+      - ai-net
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'  # RAPTOR can be resource intensive
+     depends_on:
+       ollama:
+         condition: service_healthy
+networks:
+  bouclier-net:
+    name: bouclier-saas_bouclier-net
+    external: true
+  public-net:
+    driver: bridge
+  core-net:
+    driver: bridge
+  offensive-net:
+    driver: bridge
+  ai-net:
+    driver: bridge
+    # internal: false - resolved DNS bottleneck as per SecOps review
+    # internal: true # Totally isolated from outside
+
+
+
+
+

@@ -1,0 +1,50 @@
+services:
+  # Ã¢â€â‚¬Ã¢â€â‚¬ SECURITY GATEWAY (Nginx WAF/Reverse Proxy) Ã¢â€â‚¬Ã¢â€â‚¬
+  gateway:
+    build:
+      context: ./infra/gateway
+      dockerfile: Dockerfile
+    container_name: shield-gateway
+    restart: always
+    ports:
+      - "8081:80"
+    networks:
+      - public-net
+      - core-net
+      - ai-net
+      - bouclier-net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬ SECURITY CONTROL PLANE (PEP) Ã¢â€â‚¬Ã¢â€â‚¬
+  control-plane:
+    build:
+      context: ./services/control-plane
+      dockerfile: Dockerfile

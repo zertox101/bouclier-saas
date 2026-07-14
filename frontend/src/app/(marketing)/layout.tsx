@@ -15,12 +15,11 @@ export default function MarketingLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className={cn("min-h-screen bg-bg-0 text-text-1 font-sans flex flex-col", fontSans.className)}>
+        <div className={cn("min-h-screen bg-[#020205] text-[#e0e0e0] font-sans flex flex-col", fontSans.className)}>
             <PublicNavbar />
-            <main className="flex-1 pt-16">
+            <main className="flex-1">
                 {children}
             </main>
-            <Footer />
         </div>
     );
 }

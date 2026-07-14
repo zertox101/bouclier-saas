@@ -1,156 +1,163 @@
-"use client"
+"use client";
+import React, { useState, useRef, useEffect } from "react";
+import { Play, StopCircle, Loader2, Terminal as TerminalIcon, AlertTriangle, Shield, Zap, CheckCircle, Target, Brain, Activity } from "lucide-react";
+import { API_CONFIG } from "@/lib/api-config";
 
-import React from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "../../../components/ui/card"
-import { Button } from "../../../components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../components/ui/tabs"
-import { Badge } from "../../../components/ui/badge"
-import { Copy, Globe, ArrowRight, Download } from "lucide-react"
+type LogEntry = { timestamp: number; phase: string; level: string; message: string };
 
-export default function DeployPage() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
-    return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2 text-white">
-                    <Globe className="text-cyan-400" /> Client Integration Guide
-                </h1>
-                <p className="text-slate-400">Deploy SHIELD protection to your applications in 3 simple steps.</p>
-            </div>
+export default function AutonomousPlannerPage() {
+  const [target, setTarget] = useState("");
+  const [mode, setMode] = useState<"standard" | "aggressive">("standard");
+  const [running, setRunning] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [currentPhase, setCurrentPhase] = useState("");
+  const [risk, setRisk] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const logRef = useRef<HTMLDivElement>(null);
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
 
-                {/* Left Column: Steps */}
-                <div className="lg:col-span-2 space-y-6">
+  useEffect(() => {
+    if (!running || !jobId) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_CONFIG.BACKEND_API}/agent/planner/jobs/${jobId}`, {
+          headers: { "X-Api-Key": API_CONFIG.TOOLS_API_KEY },
+        });
+        if (!res.ok) { clearInterval(interval); setRunning(false); return; }
+        const data = await res.json();
+        setLogs(data.logs || []);
+        setCurrentPhase(data.current_phase || "");
+        setRisk(data.risk);
+        setStatus(data.status || "");
+        if (data.status === "completed" || data.status === "failed") {
+          clearInterval(interval);
+          setRunning(false);
+        }
+      } catch { clearInterval(interval); setRunning(false); }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [running, jobId]);
 
-                    {/* Step 1: Get Key */}
-                    <Card className="border-l-4 border-l-cyan-500">
-                        <CardHeader>
-                            <Badge variant="outline" className="w-fit mb-2 border-cyan-500/30 text-cyan-400">Step 1</Badge>
-                            <CardTitle>Get your API Key</CardTitle>
-                            <CardDescription>Authentication token required for SDK access.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="bg-slate-950/50 rounded-b-lg mx-6 mb-6 p-4 border border-slate-800">
-                            <div className="flex items-center justify-between">
-                                <code className="font-mono text-emerald-400">sk-shield-live-8f92-x912</code>
-                                <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText("sk-shield-live-8f92-x912")}>
-                                    <Copy className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+  const startPlanner = async () => {
+    if (!target || target.length < 3 || running) return;
+    setRunning(true);
+    setLogs([]);
+    setRisk(null);
+    setCurrentPhase("INIT");
+    setStatus("running");
+    try {
+      const res = await fetch(`${API_CONFIG.BACKEND_API}/agent/planner/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": API_CONFIG.TOOLS_API_KEY },
+        body: JSON.stringify({ target, mode }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "Failed to start");
+      const data = await res.json();
+      setJobId(data.job_id);
+    } catch (e: any) {
+      setRunning(false);
+      setLogs(prev => [...prev, { timestamp: Date.now() / 1000, phase: "ERROR", level: "error", message: e.message }]);
+    }
+  };
 
-                    {/* Step 2: Install SDK */}
-                    <Card className="border-l-4 border-l-purple-500">
-                        <CardHeader>
-                            <Badge variant="outline" className="w-fit mb-2 border-purple-500/30 text-purple-400">Step 2</Badge>
-                            <CardTitle>Install Client SDK</CardTitle>
-                            <CardDescription>Download the lightweight connector for your language.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs defaultValue="python" className="w-full">
-                                <TabsList className="bg-slate-900 border border-slate-800">
-                                    <TabsTrigger value="python">Python / Flask</TabsTrigger>
-                                    <TabsTrigger value="node">Node.js</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="python" className="mt-4">
-                                    <div className="bg-black p-4 rounded-lg border border-slate-800 font-mono text-sm relative group">
-                                        <span className="text-slate-500"># Install dependencies</span><br />
-                                        <span className="text-white">pip install requests</span><br /><br />
-                                        <span className="text-slate-500"># Download SDK (See 'Download' button above)</span>
-                                        <Button size="icon" variant="ghost" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Copy className="w-4 h-4 text-slate-400" />
-                                        </Button>
-                                    </div>
-                                    <div className="mt-4 flex gap-2">
-                                        <Button variant="outline" className="text-xs" onClick={() => window.open(`${apiBase}/static/shield_sdk.py`)}>
-                                            <Download className="w-3 h-3 mr-2" /> Download shield_client.py
-                                        </Button>
-                                    </div>
-                                </TabsContent>
-                                <TabsContent value="node" className="mt-4">
-                                    <div className="bg-black p-4 rounded-lg border border-slate-800 font-mono text-sm">
-                                        <span className="text-slate-500">// Install via NPM (Coming Soon)</span><br />
-                                        <span className="text-white">npm install @shield-security/client-sdk</span>
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </CardContent>
-                    </Card>
+  const phaseColors: Record<string, string> = {
+    INIT: "text-slate-500", OBSERVE: "text-blue-400", PLAN: "text-yellow-400",
+    ACT: "text-cyan-400", VERIFY: "text-purple-400", REPORT: "text-emerald-400",
+    ERROR: "text-red-400",
+  };
+  const levelIcons: Record<string, string> = {
+    info: "●", success: "◆", warning: "▲", error: "✖",
+  };
 
-                    {/* Step 3: Implement Code */}
-                    <Card className="border-l-4 border-l-emerald-500">
-                        <CardHeader>
-                            <Badge variant="outline" className="w-fit mb-2 border-emerald-500/30 text-emerald-400">Step 3</Badge>
-                            <CardTitle>Integrate & Protect</CardTitle>
-                            <CardDescription>Add the middleware to your application entry point.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="bg-slate-950 p-4 rounded-lg font-mono text-xs overflow-x-auto border border-slate-800">
-                                <pre className="text-slate-300">
-                                    {`from flask import Flask, request, abort
-from shield_client import ShieldClient
+  return (
+    <div className="p-6 min-h-screen bg-[#0a0a0f]">
+      <div className="flex items-center gap-3 mb-6">
+        <Brain className="w-6 h-6 text-purple-400" />
+        <h1 className="text-2xl font-black text-white uppercase tracking-tight">Autonomous Planner</h1>
+        <span className="text-[10px] font-mono text-purple-500/60 uppercase tracking-widest">Observe → Plan → Act → Verify → Report</span>
+      </div>
 
-app = Flask(__name__)
-# Initialize SHIELD
-shield = ShieldClient(api_key="sk-shield-live-8f92-x912")
+      <div className="flex gap-3 mb-4">
+        <input
+          value={target}
+          onChange={e => setTarget(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && startPlanner()}
+          placeholder="Target IP or hostname..."
+          className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:border-purple-500/50"
+        />
+        <select
+          value={mode}
+          onChange={e => setMode(e.target.value as any)}
+          className="bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-slate-300 font-mono focus:outline-none"
+        >
+          <option value="standard">Standard</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+        <button
+          onClick={startPlanner}
+          disabled={running || !target}
+          className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-600 px-6 py-3 rounded-xl text-sm font-bold text-white flex items-center gap-2 transition-all"
+        >
+          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          {running ? `Running: ${currentPhase}` : "Deploy Agent"}
+        </button>
+      </div>
 
-@app.before_request
-def shield_firewall():
-    # Scan every incoming request
-    is_safe, threat = shield.scan_request(
-        method=request.method,
-        url=request.path,
-        headers=request.headers,
-        body=request.get_data(as_text=True),
-        ip=request.remote_addr
-    )
-
-    if not is_safe:
-        print(f"Blocked {threat['type']}")
-        abort(403, description="Blocked by SHIELD SaaS")
-`}
-                                </pre>
-                            </div>
-                        </CardContent>
-                        <CardFooter>
-                            <Button className="w-full bg-emerald-600 hover:bg-emerald-500">
-                                Verify Integration <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                </div>
-
-                {/* Right Column: Status & Info */}
-                <div className="space-y-6">
-                    <Card className="bg-slate-900 border-slate-800">
-                        <CardHeader>
-                            <CardTitle className="text-sm uppercase tracking-wider text-slate-400">Connectivity Status</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-300">SaaS Gateway</span>
-                                <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10">Online</Badge>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-300">Latency</span>
-                                <span className="font-mono text-cyan-400 text-sm">24ms</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm text-slate-300">Active Agents</span>
-                                <span className="font-mono text-white text-sm">0</span>
-                            </div>
-
-                            <div className="pt-4 border-t border-slate-800">
-                                <div className="text-xs text-slate-500 mb-2">Endpoint URL</div>
-                                <code className="block bg-black p-2 rounded text-xs text-slate-300">
-                                    {apiBase}/api
-                                </code>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+      {/* Status bar */}
+      {running || status === "completed" ? (
+        <div className="flex gap-4 mb-4 text-[11px] font-mono">
+          <span className="flex items-center gap-1 text-slate-400">
+            <Target className="w-3 h-3" /> Phase: <span className={`font-bold ${phaseColors[currentPhase] || "text-white"}`}>{currentPhase}</span>
+          </span>
+          <span className="flex items-center gap-1 text-slate-400">
+            <Activity className="w-3 h-3" /> Status: <span className="font-bold text-white">{status}</span>
+          </span>
+          {risk && (
+            <span className="flex items-center gap-1">
+              <AlertTriangle className={`w-3 h-3 ${risk === "CRITICAL" ? "text-red-400" : risk === "HIGH" ? "text-orange-400" : "text-yellow-400"}`} />
+              Risk: <span className={`font-bold ${risk === "CRITICAL" ? "text-red-400" : risk === "HIGH" ? "text-orange-400" : "text-yellow-400"}`}>{risk}</span>
+            </span>
+          )}
         </div>
-    )
+      ) : null}
+
+      {/* Terminal */}
+      <div
+        ref={logRef}
+        className="rounded-2xl border border-white/5 bg-black/80 backdrop-blur-sm p-4 font-mono text-[12px] leading-relaxed overflow-y-auto"
+        style={{ height: "calc(100vh - 240px)" }}
+      >
+        {logs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-slate-700">
+            <div className="text-center space-y-2">
+              <TerminalIcon className="w-8 h-8 mx-auto" />
+              <p>Enter a target and deploy the autonomous agent</p>
+              <p className="text-[10px] text-slate-800">The AI will observe, plan, act, verify, and report using real Kali tools</p>
+            </div>
+          </div>
+        ) : (
+          logs.map((log, i) => (
+            <div key={i} className="flex gap-2">
+              <span className="text-slate-600 shrink-0 w-16">{new Date(log.timestamp * 1000).toISOString().slice(11, 19)}</span>
+              <span className={`shrink-0 w-6 ${phaseColors[log.phase] || "text-slate-500"}`}>{log.phase}</span>
+              <span className={`shrink-0 w-4 ${
+                log.level === "error" ? "text-red-400" :
+                log.level === "warning" ? "text-yellow-400" :
+                log.level === "success" ? "text-emerald-400" : "text-slate-400"
+              }`}>{levelIcons[log.level] || "●"}</span>
+              <span className={`${
+                log.level === "error" ? "text-red-300" :
+                log.level === "warning" ? "text-yellow-300" :
+                log.level === "success" ? "text-emerald-300" : "text-slate-300"
+              }`}>{log.message}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }

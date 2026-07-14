@@ -1,6 +1,8 @@
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
+from collections import Counter
+from datetime import datetime, timedelta
 
 from app.core.database import redis_client
 
@@ -66,3 +68,40 @@ def detect_sequence(sequence: list[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             "sequence": events[-5:]
         }
     return None
+
+
+def correlate_events(current_event: Dict[str, Any], past_events: List[Any]) -> List[Dict[str, Any]]:
+    """
+    Correlate the new event with similar points in memory.
+    """
+    insights = []
+    
+    # Analyze Source IPs in context
+    ips = [e.payload.get("sourceIp") for e in past_events if e.payload.get("sourceIp")]
+    ip_count = Counter(ips)
+    
+    # 1. Detect Repeated Attack from same source
+    for ip, count in ip_count.items():
+        if count >= 3:
+            insights.append({
+                "type": "REPEATED_SOURCE_IP",
+                "ip": ip,
+                "count": count,
+                "severity": "high",
+                "message": f"Source {ip} has contextually similar history in 3+ instances."
+            })
+            
+    # 2. Campaign Synthesis (Multi-type attack from same source)
+    if current_event.get("sourceIp"):
+        src_ip = current_event["sourceIp"]
+        attack_types = set([e.payload.get("event_type") for e in past_events if e.payload.get("sourceIp") == src_ip])
+        if len(attack_types) > 2:
+            insights.append({
+                "type": "ATTACK_CAMPAIGN",
+                "ip": src_ip,
+                "attack_types": list(attack_types),
+                "severity": "critical",
+                "message": f"Identified active campaign from {src_ip} using multiple vectors: {', '.join(attack_types)}"
+            })
+
+    return insights

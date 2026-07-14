@@ -23,20 +23,17 @@ Enterprise-grade Blue Team & Training Platform.
 A complete Learning Management System (LMS) integrated into the SOC dashboard.
 
 ### Features
+- **Expert Intelligence Hub**: Integrated access to 40+ high-fidelity cybersecurity datasets (IoT, Malware, IDS) for model training.
 - **Real-time Telemetry**: Students see their attacks generate logs live.
 - **Safe Runner**: Execution of tools (Nmap, Curl) is proxy-restricted to internal targets only.
 - **Isolated Network**: Labs run in `academy-net` with no internet access.
 
 ### Adding Content
 - **Seed Script**: `backend/app/utils/seed_academy.py` populates the initial catalog.
-- **New Labs**: Add service to `docker-compose.academy.yml` and register in DB via seed or Admin API.
-
-### Safety Architecture
-1. **Internal Network**: Targets are unreachable from the host machine or public internet.
-2. **Tools Allowlist**: Only specific binaries (nmap, curl) are allowed via `tools-api`.
-3. **Audit Logging**: Every tool execution and flag submission is logged to `academy_audit_events`.
+- **Intelligence Registry**: `backend/app/routes/datasets.py` manages the tactical data hub.
 
 ## 🛠 Tech Stack
-- **Frontend**: Next.js 14, TailwindCSS, Recharts
-- **Backend**: FastAPI, SQLAlchemy, Postgres
+- **Frontend**: Next.js 14, TailwindCSS, Framer Motion, Lucide Icons
+- **Backend**: FastAPI, SQLAlchemy, Postgres, Redis (Celery)
+- **AI/ML**: Scikit-learn, Pandas, Joblib (Random Forest & KNN classifiers)
 - **Labs**: Docker containers (OWASP Juice Shop, etc)

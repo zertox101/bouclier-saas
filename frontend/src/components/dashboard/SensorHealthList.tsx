@@ -1,14 +1,8 @@
 'use client';
 
-import { Activity, Circle, Server, Laptop, Globe } from 'lucide-react';
-
-const MOCK_SENSORS = [
-    { name: 'DC-MAIN-01', type: 'server', status: 'online', load: 32, latency: '12ms' },
-    { name: 'WS-MARKT-04', type: 'workstation', status: 'online', load: 8, latency: '24ms' },
-    { name: 'GW-PROD-EDGE', type: 'network', status: 'offline', load: 0, latency: '--' },
-    { name: 'SEC-LOG-01', type: 'server', status: 'online', load: 64, latency: '4ms' },
-    { name: 'VPN-USER-42', type: 'remote', status: 'warning', load: 45, latency: '156ms' },
-];
+import { useState, useEffect } from 'react';
+import { apiClient } from "@/lib/api-client";
+import { Activity, Circle, Server, Laptop, Globe, Loader2 } from 'lucide-react';
 
 const TYPE_ICONS = {
     server: Server,
@@ -18,6 +12,29 @@ const TYPE_ICONS = {
 };
 
 export function SensorHealthList() {
+    const [sensors, setSensors] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSensors = async () => {
+            try {
+                const data = await apiClient('/api/assets');
+                setSensors(data.map((a: any) => ({
+                    name: a.name,
+                    type: (a.type || 'server').toLowerCase(),
+                    status: (a.status || 'offline').toLowerCase(),
+                    load: a.performance_load || 0,
+                    latency: '12ms' 
+                })));
+            } catch (error) {
+                console.error("Failed to fetch sensors:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSensors();
+    }, []);
+
     return (
         <div className="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
             <div className="p-4 border-b border-border-1 flex items-center justify-between bg-bg-2/50">
@@ -25,21 +42,32 @@ export function SensorHealthList() {
                     <Activity className="h-5 w-5 text-success" />
                     <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Sensor Health</h3>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                        <span className="text-[9px] text-success font-bold uppercase">14</span>
+                {!loading && (
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                            <span className="text-[9px] text-success font-bold uppercase">{sensors.filter(s => s.status === 'online').length}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+                            <span className="text-[9px] text-danger font-bold uppercase">{sensors.filter(s => s.status !== 'online').length}</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-danger" />
-                        <span className="text-[9px] text-danger font-bold uppercase">2</span>
-                    </div>
-                </div>
+                )}
             </div>
 
-            <div className="flex-1 p-2 space-y-1">
-                {MOCK_SENSORS.map((sensor) => {
-                    const Icon = TYPE_ICONS[sensor.type] || Server;
+            <div className="flex-1 p-2 space-y-1 overflow-y-auto">
+                {loading ? (
+                    <div className="flex items-center justify-center h-40">
+                        <Loader2 className="h-5 w-5 text-slate-500 animate-spin" />
+                    </div>
+                ) : sensors.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-40 opacity-20">
+                         <Circle className="h-10 w-10 text-white mb-2" />
+                         <span className="text-[10px] font-black uppercase tracking-widest">No sensors active</span>
+                    </div>
+                ) : sensors.map((sensor) => {
+                    const Icon = TYPE_ICONS[sensor.type as keyof typeof TYPE_ICONS] || Server;
                     return (
                         <div key={sensor.name} className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-3/30 transition-colors group">
                             <div className="flex items-center gap-3 min-w-0">
@@ -59,8 +87,8 @@ export function SensorHealthList() {
                                 </div>
                                 <div className="w-16">
                                     <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-tighter ${sensor.status === 'online' ? 'bg-success/10 text-success border-success/20' :
-                                            sensor.status === 'offline' ? 'bg-danger/10 text-danger border-danger/20' :
-                                                'bg-warning/10 text-warning border-warning/20'
+                                        sensor.status === 'offline' ? 'bg-danger/10 text-danger border-danger/20' :
+                                            'bg-warning/10 text-warning border-warning/20'
                                         }`}>
                                         <span className={`h-1 w-1 rounded-full bg-current ${sensor.status === 'online' ? 'animate-pulse' : ''}`} />
                                         {sensor.status}

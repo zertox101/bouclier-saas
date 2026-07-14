@@ -16,24 +16,41 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const url = `${BASE_URL}${endpoint}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const orgId = typeof window !== 'undefined' ? localStorage.getItem('auth_org_id') : null;
 
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
+  }
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (orgId) {
+    headers.set('X-Organization-ID', orgId);
   }
 
   try {
     const response = await fetch(url, {
       ...options,
       headers,
-      credentials: 'include', // Important for httpOnly cookies
+      credentials: 'include',
     });
 
     const status = response.status;
 
+    if (status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.location.href = '/login';
+      }
+      return { error: 'Unauthorized', status };
+    }
+
     if (status === 204) return { status };
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       return {

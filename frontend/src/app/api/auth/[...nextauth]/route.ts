@@ -1,14 +1,11 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import { prisma } from '@/lib/prisma';
-import { compare } from 'bcryptjs';
 
 export const runtime = 'nodejs';
 
+const API_URL = process.env.INTERNAL_API_URL || 'http://backend:8005';
+
 export const authOptions: NextAuthOptions = {
-    // @ts-ignore
-    adapter: PrismaAdapter(prisma),
     providers: [
         CredentialsProvider({
             name: 'Credentials',
@@ -17,46 +14,25 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) {
-                    throw new Error('Invalid credentials');
-                }
-
-                console.log(`[Auth] Attempting login for: ${credentials.email}`);
-                console.log(`[Auth] Querying user in Prisma: ${credentials.email}`);
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email },
-                    include: { organization: true }
+                const backendRes = await fetch(`${API_URL}/api/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: credentials?.email, password: credentials?.password })
                 });
-                console.log(`[Auth] Prisma query finished for: ${credentials.email}, found: ${!!user}`);
-
-                if (!user) {
-                    console.log('[Auth] User not found in DB');
-                    throw new Error('User not found');
+                if (!backendRes.ok) {
+                    throw new Error("Invalid credentials");
                 }
-
-                if (!user.password) {
-                    console.log('[Auth] User has no password set');
-                    throw new Error('User has no password');
-                }
-
-                console.log(`[Auth] User data retrieved, starting comparison for: ${user.email}`);
-                const isValid = await compare(credentials.password, user.password);
-                console.log(`[Auth] Comparison result for ${credentials.email}: ${isValid}`);
-
-                if (!isValid) {
-                    console.log(`[Auth] Invalid password for: ${credentials.email}`);
-                    throw new Error('Invalid password');
-                }
-
+                const backendData = await backendRes.json();
                 return {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    image: user.image,
-                    role: user.role,
-                    orgId: user.orgId,
-                    orgName: user.organization?.name,
-                    orgPlan: user.organization?.plan
+                    id: String(backendData.user?.id ?? ""),
+                    name: backendData.user?.username ?? credentials?.email,
+                    email: backendData.user?.email ?? credentials?.email,
+                    role: backendData.user?.role ?? "ANALYST",
+                    orgId: backendData.user?.org_id ?? null,
+                    orgName: "Bouclier Enterprise",
+                    orgPlan: "PRO",
+                    permissions: backendData.user?.permissions ?? [],
+                    accessToken: backendData.access_token
                 };
             }
         })
@@ -71,21 +47,20 @@ export const authOptions: NextAuthOptions = {
                 token.orgId = user.orgId;
                 token.orgName = user.orgName;
                 token.orgPlan = user.orgPlan;
+                token.permissions = user.permissions;
+                token.accessToken = user.accessToken;
             }
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
-                // @ts-ignore
-                session.user.role = token.role;
-                // @ts-ignore
-                session.user.id = token.sub;
-                // @ts-ignore
+                session.user.role = token.role as "SUPER_ADMIN" | "ORG_ADMIN" | "ANALYST";
+                session.user.id = token.sub!;
                 session.user.orgId = token.orgId;
-                // @ts-ignore
                 session.user.orgName = token.orgName;
-                // @ts-ignore
                 session.user.orgPlan = token.orgPlan;
+                session.user.permissions = token.permissions;
+                session.user.accessToken = token.accessToken;
             }
             return session;
         }

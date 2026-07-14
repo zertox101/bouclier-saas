@@ -27,8 +27,9 @@ const statusColors: Record<string, string> = {
     stopped: 'text-warning bg-warning/10 border-warning/20',
 };
 
+import { apiClient, ApiError } from '@/lib/api-client';
+
 export default function ScansPage() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
     const [scans, setScans] = useState<ScanJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -44,22 +45,19 @@ export default function ScansPage() {
         if (isRefresh) setIsRefreshing(true);
         else setIsLoading(true);
         try {
-            const res = await fetch(`${apiBase}/api/scans/`);
-            if (res.ok) {
-                const data = await res.json();
-                setScans(data);
-            }
+            const data = await apiClient('/api/scans/');
+            setScans(data);
         } catch (err) {
             console.error("Failed to fetch scans", err);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [apiBase]);
+    }, []);
 
     useEffect(() => {
         fetchScans();
-        const interval = setInterval(() => fetchScans(true), 5000);
+        const interval = setInterval(() => fetchScans(true), 10000);
         return () => clearInterval(interval);
     }, [fetchScans]);
 
@@ -67,79 +65,72 @@ export default function ScansPage() {
         e.preventDefault();
         setError(null);
         try {
-            const res = await fetch(`${apiBase}/api/scans/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            await apiClient('/api/scans/', {
+                json: {
                     target: newScanTarget,
                     tool: newScanTool,
                     config: {}
-                })
+                }
             });
-            if (res.ok) {
-                setIsNewScanModalOpen(false);
-                setNewScanTarget('');
-                fetchScans();
-            } else {
-                const data = await res.json();
-                setError(data.detail || "Failed to start scan");
-            }
+            setIsNewScanModalOpen(false);
+            setNewScanTarget('');
+            fetchScans();
         } catch (err) {
-            setError("Network error occurred");
+            if (err instanceof ApiError) {
+                setError(err.data.detail || "Failed to start scan");
+            } else {
+                setError("Network error occurred");
+            }
         }
     };
 
     return (
-        <div className="space-y-8 animate-fade-in relative z-10 pb-12">
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10 pb-12">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-8 pt-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 bg-white/[0.01] p-10 rounded-[40px] border border-white/5 backdrop-blur-3xl">
                 <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="h-10 w-10 rounded-xl bg-neon-1/10 border border-neon-1/20 flex items-center justify-center text-neon-1 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-                            < Globe className="h-5 w-5" />
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-text-3">AppSec Orchestrator</span>
-                    </div>
-                    <h1 className="text-display mb-1 text-text-1">
-                        Web Security <span className="text-neon-1">Scanner</span>
+                    <div className="section-label">Automated Vulnerability Research</div>
+                    <h1 className="display-title mb-4">
+                        Web Security <span className="text-neon-1">Scanner.</span>
                     </h1>
+                    <p className="text-text-2 text-sm max-w-xl leading-relaxed">
+                        AppSec Orchestration for dynamic asset discovery and exploitation mapping.
+                        Integrated with Nuclei v3 and OWASP ZAP for full spectral coverage.
+                    </p>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
                     <button
                         onClick={() => setIsNewScanModalOpen(true)}
-                        className="h-12 px-8 rounded-xl bg-neon-1 text-bg-0 font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-3 shadow-neon-1/20 hover:scale-105 active:scale-95"
+                        className="btn-cyber flex items-center gap-4"
                     >
-                        <Plus className="h-4 w-4" /> New Operation
+                        <Plus className="h-5 w-5" /> Initialize New Operation
                     </button>
                     <button
                         onClick={() => fetchScans(true)}
-                        className={`h-12 w-12 rounded-xl bg-bg-2/50 border border-border-1 flex items-center justify-center text-text-3 hover:text-text-1 transition-all ${isRefreshing ? 'animate-spin' : ''}`}
+                        className={cn(
+                            "h-14 w-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-all group",
+                            isRefreshing && "animate-spin"
+                        )}
                     >
-                        <RefreshCw className="h-4 w-4" />
+                        <RefreshCw className="h-6 w-6" />
                     </button>
                 </div>
             </div>
 
-            {/* Scans List */}
-            <div className="glass-card p-0 rounded-2xl overflow-hidden border border-border-1 bg-bg-1/50">
-                <div className="p-6 border-b border-border-1 flex items-center justify-between bg-bg-2/30">
-                    <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-xl bg-bg-2 border border-border-1 flex items-center justify-center">
-                            <Clock className="h-5 w-5 text-text-3" />
+            {/* Scans List Container */}
+            <div className="premium-card !p-0 overflow-hidden shadow-2xl">
+                <div className="p-10 border-b border-white/5 flex items-center justify-between bg-white/[0.01]">
+                    <div className="flex items-center gap-6">
+                        <div className="h-12 w-12 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center text-cyan-400">
+                            <Clock className="h-6 w-6" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-text-1 tracking-widest uppercase">Job Registry</h2>
-                            <p className="text-[9px] text-text-3 font-bold uppercase mt-1">Total Assets Scanned: {scans.length}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex bg-bg-2/50 rounded-lg p-0.5 border border-border-1">
-                            {['all', 'running', 'completed'].map(f => (
-                                <button key={f} className="px-3 py-1 text-[8px] font-black uppercase tracking-widest text-text-3 hover:text-text-1">
-                                    {f}
-                                </button>
-                            ))}
+                            <h2 className="text-[12px] font-black text-white tracking-[0.2em] uppercase">Scanned Operational Registry</h2>
+                            <p className="text-[9px] text-emerald-400 font-black uppercase mt-1.5 tracking-widest flex items-center gap-2">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Monitoring {scans.length} Network Assets
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -147,79 +138,79 @@ export default function ScansPage() {
                 <div className="overflow-x-auto min-h-[400px]">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-bg-1/80 border-b border-border-1">
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest">ID</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest">Target Asset</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest text-center">Engine</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest text-center">Status</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest text-center">Findings</th>
-                                <th className="px-8 py-4 text-[9px] font-black text-text-3 uppercase tracking-widest text-right">Activity</th>
+                            <tr className="bg-white/[0.02] border-b border-white/5">
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Job ID</th>
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Target Vector</th>
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Engine Subsystem</th>
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Operational Status</th>
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Spectral Findings</th>
+                                <th className="px-10 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Activity Period</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-border-1/30">
+                        <tbody className="divide-y divide-white/5">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={6} className="py-32 text-center">
-                                        <div className="flex flex-col items-center gap-4">
-                                            <Loader2 className="h-8 w-8 text-neon-1 animate-spin" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-text-3 animate-pulse">Accessing Vault...</span>
+                                    <td colSpan={6} className="py-40 text-center">
+                                        <div className="flex flex-col items-center gap-6">
+                                            <Loader2 className="h-10 w-10 text-cyan-400 animate-spin" />
+                                            <span className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-500 animate-pulse">Decrypting Job Registry...</span>
                                         </div>
                                     </td>
                                 </tr>
                             ) : scans.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="py-32 text-center">
-                                        <div className="flex flex-col items-center gap-4 opacity-20">
-                                            <Search className="h-12 w-12 text-text-3" />
-                                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-text-3">No Operational History</span>
+                                    <td colSpan={6} className="py-40 text-center">
+                                        <div className="flex flex-col items-center gap-8 opacity-10">
+                                            <Search className="h-20 w-20 text-white" />
+                                            <span className="text-[11px] font-black uppercase tracking-[0.5em] text-white">No Historical Operations Recorded</span>
                                         </div>
                                     </td>
                                 </tr>
                             ) : (
-                                scans.map(scan => (
+                                scans.map((scan, idx) => (
                                     <tr
                                         key={scan.id}
-                                        className="group hover:bg-bg-2/40 transition-all cursor-pointer"
+                                        className="group hover:bg-white/[0.03] transition-all cursor-pointer"
                                         onClick={() => setSelectedScanId(scan.id)}
                                     >
-                                        <td className="px-8 py-6 text-[10px] font-mono text-text-3">#{scan.id}</td>
-                                        <td className="px-8 py-6">
+                                        <td className="px-10 py-8 text-[11px] font-mono text-slate-500">#{scan.id.toString().padStart(4, '0')}</td>
+                                        <td className="px-10 py-8">
                                             <div className="flex flex-col">
-                                                <span className="text-xs font-black text-text-1 tracking-tight">{scan.target}</span>
-                                                <span className="text-[8px] font-bold text-text-3 uppercase tracking-widest mt-0.5">
-                                                    Initiated: {new Date(scan.created_at).toLocaleString()}
+                                                <span className="text-[13px] font-black text-white tracking-tight group-hover:text-cyan-400 transition-colors italic">{scan.target}</span>
+                                                <span className="text-[9px] font-black text-slate-700 uppercase tracking-widest mt-1.5">
+                                                    ACQUIRED: {new Date(scan.created_at).toLocaleString()}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-8 py-6 text-center">
+                                        <td className="px-10 py-8 text-center">
                                             <span className={cn(
-                                                "px-2.5 py-1 rounded text-[8px] font-black tracking-widest uppercase border",
-                                                scan.tool === 'zap' ? "bg-p-400/10 text-p-400 border-p-400/20" : "bg-neon-1/10 text-neon-1 border-neon-1/20"
+                                                "px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase border",
+                                                scan.tool === 'zap' ? "bg-p-400/10 text-p-400 border-p-400/20" : "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]"
                                             )}>
-                                                {scan.tool}
+                                                {scan.tool} ENGINE
                                             </span>
                                         </td>
-                                        <td className="px-8 py-6 text-center">
+                                        <td className="px-10 py-8 text-center">
                                             <span className={cn(
-                                                "px-3 py-1 rounded-full text-[8px] font-black tracking-widest uppercase border inline-flex items-center gap-1.5",
+                                                "px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase border inline-flex items-center gap-2",
                                                 statusColors[scan.status]
                                             )}>
-                                                <div className="h-1 w-1 rounded-full bg-current" />
+                                                <div className="h-1.5 w-1.5 rounded-full bg-current shadow-[0_0_8px_currentColor]" />
                                                 {scan.status}
                                             </span>
                                         </td>
-                                        <td className="px-8 py-6 text-center">
-                                            <span className={cn(
-                                                "text-xs font-black",
-                                                (scan.findings_count || 0) > 0 ? "text-warning" : "text-success"
+                                        <td className="px-10 py-8 text-center">
+                                            <div className={cn(
+                                                "text-sm font-black italic",
+                                                (scan.findings_count || 0) > 0 ? "text-red-500 animate-pulse" : "text-emerald-500"
                                             )}>
-                                                {scan.findings_count || 0}
-                                            </span>
+                                                {(scan.findings_count || 0).toString().padStart(2, '0')}
+                                            </div>
                                         </td>
-                                        <td className="px-8 py-6 text-right font-mono text-[9px] text-text-3">
+                                        <td className="px-10 py-8 text-right font-mono text-[10px] text-slate-500 uppercase tracking-widest">
                                             {scan.finished_at ? (
-                                                <span className="opacity-60">{Math.round((new Date(scan.finished_at).getTime() - new Date(scan.created_at).getTime()) / 1000)}s</span>
-                                            ) : '-'}
+                                                <span className="opacity-60">{Math.round((new Date(scan.finished_at).getTime() - new Date(scan.created_at).getTime()) / 1000)}s Latency</span>
+                                            ) : 'ACTIVE_OPER'}
                                         </td>
                                     </tr>
                                 ))
@@ -232,98 +223,103 @@ export default function ScansPage() {
             {/* New Scan Modal */}
             <AnimatePresence>
                 {isNewScanModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 pb-20">
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-8">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-bg-0/90 backdrop-blur-xl"
+                            className="absolute inset-0 bg-black/80 backdrop-blur-2xl"
                             onClick={() => setIsNewScanModalOpen(false)}
                         />
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            initial={{ scale: 0.95, opacity: 0, y: 30 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="relative w-full max-w-xl bg-bg-1 border border-border-1 rounded-3xl p-10 shadow-2xl overflow-hidden"
+                            exit={{ scale: 0.95, opacity: 0, y: 30 }}
+                            className="relative w-full max-w-2xl bg-[#08080c] border border-white/10 rounded-[40px] p-12 shadow-[0_20px_80px_rgba(0,0,0,0.8)] overflow-hidden"
                         >
-                            <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
-                                <Zap className="h-32 w-32 text-neon-1" />
+                            <div className="absolute -top-24 -right-24 opacity-[0.03] pointer-events-none">
+                                <Zap className="h-80 w-80 text-cyan-400" />
                             </div>
 
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="h-12 w-12 rounded-2xl bg-neon-1/10 border border-neon-1/20 flex items-center justify-center text-neon-1">
-                                    <Play className="h-6 w-6" />
+                            <div className="flex items-center gap-6 mb-12">
+                                <div className="h-16 w-16 rounded-[24px] bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
+                                    <Play className="h-8 w-8" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-black text-text-1 uppercase tracking-tight">Deploy Security Engine</h3>
-                                    <p className="text-[10px] text-text-3 font-bold uppercase tracking-widest">Strategic Asset Evaluation</p>
+                                    <h3 className="text-[20px] font-black text-white uppercase tracking-tight italic">Initialize Discovery Sequence</h3>
+                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1.5">Strategic Infrastructure Evaluation Cluster</p>
                                 </div>
                             </div>
 
-                            <form onSubmit={handleCreateScan} className="space-y-8">
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-text-3 uppercase tracking-[0.2em]">Target Infrastructure URL</label>
+                            <form onSubmit={handleCreateScan} className="space-y-10">
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Primary Target Vector (FQDN/IP)</label>
                                     <div className="relative group">
-                                        <div className="absolute inset-y-0 left-5 flex items-center text-text-3 group-focus-within:text-neon-1 transition-colors">
-                                            < Globe className="h-5 w-5" />
+                                        <div className="absolute inset-y-0 left-6 flex items-center text-slate-700 group-focus-within:text-cyan-400 transition-colors">
+                                            < Globe className="h-6 w-6" />
                                         </div>
                                         <input
                                             type="text"
-                                            placeholder="https://internal-app.local"
+                                            placeholder="https://node-internal.bouclier.ma"
                                             value={newScanTarget}
                                             onChange={(e) => setNewScanTarget(e.target.value)}
                                             required
-                                            className="w-full bg-bg-2 border border-border-1 rounded-2xl pl-16 pr-6 py-5 text-xs font-black text-text-1 placeholder:text-text-3/30 focus:outline-none focus:border-neon-1/30 transition-all uppercase tracking-widest"
+                                            className="w-full bg-black/40 border border-white/10 rounded-[28px] pl-16 pr-8 py-5 text-[12px] font-black text-white placeholder:text-slate-900 focus:outline-none focus:border-cyan-500/30 transition-all uppercase tracking-widest font-mono"
                                         />
                                     </div>
-                                    <p className="text-[8px] text-text-3 font-bold uppercase tracking-widest">Legal Notice: Authorized for Public Scanning. Ensure Proper Authorization before engaging targets.</p>
+                                    <p className="text-[8px] text-slate-700 font-black uppercase tracking-[0.2em] ml-6 italic">Security Disclaimer: Active reconnaissance initiated only on authorized targets.</p>
                                 </div>
 
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-text-3 uppercase tracking-[0.2em]">Scanner Subsystem</label>
-                                    <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-2">Offensive Subsystem Selection</label>
+                                    <div className="grid grid-cols-2 gap-6">
                                         {[
-                                            { id: 'nuclei', name: 'Nuclei v3', desc: 'Template-based scanning' },
-                                            { id: 'zap', name: 'OWASP ZAP', desc: 'Dynamic App Discovery' }
+                                            { id: 'nuclei', name: 'NUCLEI SPECTRAL', desc: 'Template-based spectral scanning' },
+                                            { id: 'zap', name: 'ZAP DYNAMIC', desc: 'Active payload discovery engine' }
                                         ].map(t => (
                                             <button
                                                 key={t.id}
                                                 type="button"
                                                 onClick={() => setNewScanTool(t.id as any)}
                                                 className={cn(
-                                                    "p-6 rounded-2xl border text-left transition-all",
+                                                    "p-8 rounded-[32px] border text-left transition-all relative overflow-hidden group",
                                                     newScanTool === t.id
-                                                        ? "bg-neon-1/5 border-neon-1/40 shadow-lg shadow-neon-1/5"
-                                                        : "bg-bg-1 border-border-1 hover:border-text-3"
+                                                        ? "bg-cyan-500/5 border-cyan-500/30 shadow-[0_10px_40px_rgba(6,182,212,0.1)]"
+                                                        : "bg-black/40 border-white/5 hover:border-white/10"
                                                 )}
                                             >
-                                                <div className={cn("text-[10px] font-black uppercase tracking-widest mb-1", newScanTool === t.id ? "text-neon-1" : "text-text-1")}>{t.name}</div>
-                                                <div className="text-[8px] font-bold text-text-3 uppercase">{t.desc}</div>
+                                                <div className={cn("text-[11px] font-black uppercase tracking-widest mb-2 italic", newScanTool === t.id ? "text-cyan-400" : "text-white")}>{t.name}</div>
+                                                <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.desc}</div>
+                                                {newScanTool === t.id && (
+                                                    <motion.div layoutId="choice" className="absolute top-0 right-0 p-4">
+                                                        <CheckCircle className="h-5 w-5 text-cyan-400" />
+                                                    </motion.div>
+                                                )}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
                                 {error && (
-                                    <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-[10px] font-black uppercase tracking-widest flex items-center gap-3">
-                                        <AlertTriangle className="h-4 w-4" />
-                                        {error}
-                                    </div>
+                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-4">
+                                        <AlertTriangle className="h-5 w-5 animate-pulse" />
+                                        OP_ERROR: {error}
+                                    </motion.div>
                                 )}
 
-                                <div className="flex gap-4 pt-4">
+                                <div className="flex gap-6 pt-6">
                                     <button
                                         type="button"
                                         onClick={() => setIsNewScanModalOpen(false)}
-                                        className="flex-1 h-14 rounded-2xl bg-bg-2 border border-border-1 text-text-3 font-black text-[10px] uppercase tracking-widest hover:text-text-1 transition-all"
+                                        className="flex-1 h-16 rounded-[28px] bg-white/[0.03] border border-white/10 text-slate-500 font-black text-[11px] uppercase tracking-widest hover:text-white transition-all"
                                     >
-                                        Abort
+                                        Abort Discovery
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-2 h-14 px-12 rounded-2xl bg-neon-1 text-bg-0 font-black text-[11px] uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-neon-1/20"
+                                        className="flex-[1.5] btn-cyber h-16 text-[12px] font-black"
                                     >
-                                        Initialize Engine
+                                        Engage Target Engine
                                     </button>
                                 </div>
                             </form>
@@ -332,12 +328,11 @@ export default function ScansPage() {
                 )}
             </AnimatePresence>
 
-            {/* Detail Drawer */}
+            {/* Detail Drawer - Restored logic below */}
             <AnimatePresence>
                 {selectedScanId && (
                     <ScanDrawer
                         id={selectedScanId}
-                        apiBase={apiBase}
                         onClose={() => setSelectedScanId(null)}
                     />
                 )}
@@ -346,7 +341,8 @@ export default function ScansPage() {
     );
 }
 
-function ScanDrawer({ id, apiBase, onClose }: { id: number; apiBase: string; onClose: () => void }) {
+
+function ScanDrawer({ id, onClose }: { id: number; onClose: () => void }) {
     const [detail, setDetail] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'findings' | 'logs'>('findings');
@@ -355,19 +351,17 @@ function ScanDrawer({ id, apiBase, onClose }: { id: number; apiBase: string; onC
         const fetchDetail = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch(`${apiBase}/api/scans/${id}`);
-                const data = await res.json();
-                setDetail(data);
-
-                // Fetch findings
-                const fRes = await fetch(`${apiBase}/api/scans/${id}/findings`);
-                const fData = await fRes.json();
-                setDetail((prev: any) => ({ ...prev, findings: fData }));
-            } catch (err) { }
-            finally { setIsLoading(false); }
+                const data = await apiClient(`/api/scans/${id}`);
+                const fData = await apiClient(`/api/scans/${id}/findings`);
+                setDetail({ ...data, findings: fData });
+            } catch (err) { 
+                console.error("Failed to fetch scan detail", err);
+            } finally { 
+                setIsLoading(false); 
+            }
         };
         fetchDetail();
-    }, [id, apiBase]);
+    }, [id]);
 
     const statusColors: Record<string, string> = {
         pending: 'text-text-3 bg-bg-2/50 border-border-1',

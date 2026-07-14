@@ -1,0 +1,72 @@
+# ── Python cache ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.pytest_cache/
+
+# ── Virtual environments ───────────────────────────────────────
+venv/
+venv_new/
+.venv/
+env/
+
+# ── Environment secrets ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Docker ────────────────────────────────────────────────────
+pg_data/
+docker-data/
+docker-volumes/
+
+# ── IDE files ─────────────────────────────────────────────────
+.vscode/
+.idea/
+
+# ── Logs & temp ───────────────────────────────────────────────
+logs/
+*.log
+*.tmp
+temp/
+
+# ── Build artifacts ───────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Node / Frontend ───────────────────────────────────────────
+node_modules/
+.next/
+out/
+coverage/
+
+# ── Security reports / scans ──────────────────────────────────
+reports/
+scans/
+exports/
+
+# ── AI / LLM cache ────────────────────────────────────────────
+.cache/
+hf_cache/
+transformers_cache/
+
+# ── Runtime secrets ───────────────────────────────────────────
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+
+# ── Large data / DB ───────────────────────────────────────────
+data/
+shield.db
+*.sqlite
+*.db
+
+# ── OS garbage ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

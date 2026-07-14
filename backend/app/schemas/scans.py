@@ -2,10 +2,19 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from pydantic import BaseModel, Field, validator
+import re
+
 class ScanCreate(BaseModel):
-    target: str
-    tool: str  # zap, nuclei
+    target: str = Field(..., min_length=3, max_length=255)
+    tool: str = Field(..., pattern="^(zap|nuclei)$")
     config: Optional[Dict[str, Any]] = {}
+
+    @validator('target')
+    def validate_target(cls, v):
+        if not re.match(r'^(https?://|)[a-zA-Z0-9.-]+(:[0-9]+|)(/.*|)$', v):
+            raise ValueError('Invalid target format. Must be a valid URL or IP.')
+        return v
 
 class FindingResponse(BaseModel):
     id: int

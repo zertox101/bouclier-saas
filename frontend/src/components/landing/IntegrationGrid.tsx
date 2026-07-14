@@ -3,10 +3,10 @@
 import { motion } from 'framer-motion';
 
 const INTEGRATIONS = [
+    { name: 'Shodan', label: '327k+ IP Enterprise Search', color: 'bg-[#cf142b] text-white' },
     { name: 'HashiCorp', label: 'Vault & Consul Integration', color: 'bg-white text-black' },
     { name: 'Microsoft', label: 'Azure Active Directory', color: 'bg-[#00a4ef] text-white' },
     { name: 'Nutanix', label: 'Hybrid Cloud Protection', color: 'bg-[#502e91] text-white' },
-    { name: 'Oracle', label: 'OCI Security Operations', color: 'bg-[#ff0000] text-white' },
 ];
 
 export function IntegrationGrid() {

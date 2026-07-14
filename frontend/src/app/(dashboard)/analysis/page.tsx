@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiClient } from '@/lib/api-client';
 import {
     Upload,
     AlertTriangle,
@@ -22,7 +23,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export default function AnalysisPage() {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
     const [file, setFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<any>(null);
@@ -37,22 +37,19 @@ export default function AnalysisPage() {
     const fetchHistory = async () => {
         try {
             setError(null);
-            const res = await fetch(`${apiBase}/alerts?limit=200`);
-            if (res.ok) {
-                const data = await res.json();
-                const mapped = (Array.isArray(data) ? data : []).map((alert: any) => {
-                    const lastEvent = alert?.evidence?.last_event || {};
-                    const details = alert?.details || {};
-                    return {
-                        timestamp: new Date((alert.timestamp_epoch || Date.now() / 1000) * 1000).toISOString(),
-                        source: alert.user || alert.host || lastEvent.src_ip || "unknown",
-                        type: alert.rule_id || lastEvent.event_type || "alert",
-                        severity: (alert.severity || "medium").toLowerCase(),
-                        details: details.summary || details.reason || lastEvent.event_type || "Alert detected",
-                    };
-                });
-                setHistoryList(mapped);
-            }
+            const data = await apiClient('/alerts?limit=200');
+            const mapped = (Array.isArray(data) ? data : []).map((alert: any) => {
+                const lastEvent = alert?.evidence?.last_event || {};
+                const details = alert?.details || {};
+                return {
+                    timestamp: new Date((alert.timestamp_epoch || Date.now() / 1000) * 1000).toISOString(),
+                    source: alert.user || alert.host || lastEvent.src_ip || "unknown",
+                    type: alert.rule_id || lastEvent.event_type || "alert",
+                    severity: (alert.severity || "medium").toLowerCase(),
+                    details: details.summary || details.reason || lastEvent.event_type || "Alert detected",
+                };
+            });
+            setHistoryList(mapped);
         } catch (e) {
             setHistoryList([]);
             setError("Spectral Archive Unreachable.");
@@ -72,11 +69,10 @@ export default function AnalysisPage() {
         const formData = new FormData();
         formData.append("file", file);
         try {
-            const res = await fetch(`${apiBase}/api/ddos/analyze`, {
+            const data = await apiClient('/api/ddos/analyze', {
                 method: "POST",
                 body: formData,
             });
-            const data = await res.json();
             if (data.status === 'success') {
                 setResults(data);
             } else {

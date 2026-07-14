@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedHound PRO - Advanced Bug Bounty Platform</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0c12;
+            color: #e4e6eb;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 68, 68, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 68, 68, 0.05) 0%, transparent 50%),
+                repeating-linear-gradient(45deg, rgba(255,68,68,0.02) 0px, rgba(255,68,68,0.02) 2px, transparent 2px, transparent 8px);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1d24;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ff4444;
+            border-radius: 3px;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0f1119 0%, #0a0c12 100%);
+            border-bottom: 1px solid rgba(255, 68, 68, 0.3);
+            padding: 0 30px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255,68,68,0.4); }
+            50% { box-shadow: 0 0 30px rgba(255,68,68,0.6); }
+        }
+
+        .logo h1 {
+            font-size: 26px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #ff4444);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo span {
+            font-size: 11px;
+            color: #ff4444;
+            letter-spacing: 1.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        /* Container */
+        .container {
+            display: flex;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 340px;
+            background: rgba(15, 17, 25, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 68, 68, 0.2);
+            padding: 25px;
+            position: sticky;
+            top: 70px;
+            height: calc(100vh - 70px);
+            overflow-y: auto;
+        }
+
+        /* Cards */
+        .card {
+            background: linear-gradient(135deg, rgba(22, 24, 32, 0.95) 0%, rgba(15, 17, 25, 0.95) 100%);
+            border: 1px solid rgba(255, 68, 68, 0.2);
+            border-radius: 20px;
+            padding: 22px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 68, 68, 0.5);
+            box-shadow: 0 8px 25px rgba(255, 68, 68, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #ff4444;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title i {
+            font-size: 16px;
+        }
+
+        /* Inputs */
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: #8b8fad;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            background: #0a0c12;
+            border: 1px solid #2a2e3e;
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #e4e6eb;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #ff4444;
+            box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 68, 68, 0.4);
+        }
+
+        .btn-secondary {
+            background: #1a1d24;
+            color: #ff4444;
+            border: 1px solid #ff4444;
+        }
+
+        .btn-secondary:hover {
+            background: #ff4444;
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #00cc66, #009944);
+            color: white;
+        }
+
+        .btn-danger {
+            background: rgba(255, 68, 68, 0.1);
+            color: #ff4444;
+            border: 1px solid #ff4444;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: rgba(10, 12, 18, 0.6);
+            border-radius: 14px;
+            padding: 14px;
+            text-align: center;
+            border: 1px solid rgba(255,68,68,0.1);
+        }
+
+        .stat-box-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #ff4444;
+        }
+
+        .stat-box-label {
+            font-size: 10px;
+            color: #6c7293;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+        }
+
+        /* Progress Section */
+        .progress-section {
+            background: linear-gradient(135deg, #1a1d24, #0f1119);
+            border-radius: 20px;
+            padding: 22px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 68, 68, 0.2);
+        }
+
+        .progress-bar-container {
+            background: #2a2e3e;
+            border-radius: 30px;
+            height: 10px;
+            overflow: hidden;
+            margin: 18px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ff8888);
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 30px;
+            position: relative;
+        }
+
+        /* Vulnerabilities List */
+        .vuln-list {
+            max-height: 450px;
+            overflow-y: auto;
+        }
+
+        .vuln-item {
+            background: rgba(255, 68, 68, 0.05);
+            border-left: 4px solid #ff4444;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .vuln-item:hover {
+            background: rgba(255, 68, 68, 0.12);
+            transform: translateX(5px);
+        }
+
+        .vuln-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .vuln-type {
+            font-weight: 700;
+            font-size: 14px;
+            color: #ff4444;
+        }
+
+        .severity {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+
+        .severity-Critical { background: #ff4444; color: white; }
+        .severity-High { background: #ff8844; color: white; }
+        .severity-Medium { background: #ffaa44; color: #1a1d24; }
+        .severity-Low { background: #44ff44; color: #1a1d24; }
+
+        .vuln-url {
+            font-size: 11px;
+            color: #8b8fad;
+            margin-bottom: 8px;
+            word-break: break-all;
+            font-family: monospace;
+        }
+
+        .vuln-payload {
+            font-family: 'Monaco', monospace;
+            font-size: 10px;
+            background: #0a0c12;
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 8px;
+            color: #ff8888;
+            word-break: break-all;
+        }
+
+        /* Log Area */
+        .log-area {
+            background: #0a0c12;
+            border-radius: 14px;
+            height: 280px;
+            overflow-y: auto;
+            font-family: 'Monaco', monospace;
+            font-size: 11px;
+            padding: 15px;
+        }
+
+        .log-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 68, 68, 0.08);
+            color: #8b8fad;
+        }
+
+        .log-entry i {
+            margin-right: 8px;
+            width: 16px;
+        }
+
+        .log-entry.success { color: #44ff44; }
+        .log-entry.error { color: #ff4444; }
+        .log-entry.info { color: #44aaff; }
+        .log-entry.warning { color: #ffaa44; }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .toggle-switch label {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #2a2e3e;
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #ff4444;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .badge-running {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1d24, #0f1119);
+            border-radius: 24px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 30px;
+            border: 1px solid #ff4444;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,68,68,0.2);
+            padding-bottom: 15px;
+        }
+
+        .modal-header h3 {
+            color: #ff4444;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: #ff4444;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* Report Preview */
+        .report-preview {
+            background: #0a0c12;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+
+        .report-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: relative;
+                top: 0;
+                height: auto;
+            }
+            .container {
+                flex-direction: column;
+            }
+            .report-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-shield-hog"></i>
+            </div>
+            <div>
+                <h1>RedHound <span style="color:#ff4444;">PRO</span></h1>
+                <span>ADVANCED BUG BOUNTY FRAMEWORK</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="exportPDFBtn" style="width: auto;">
+                <i class="fas fa-file-pdf"></i> Export PDF
+            </button>
+            <button class="btn btn-secondary" id="exportJSONBtn" style="width: auto;">
+                <i class="fas fa-code"></i> Export JSON
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <!-- New Scan Card -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-bullseye"></i>
+                    <span>TARGET SCAN</span>
+                </div>
+                <div class="input-group">
+                    <label><i class="fas fa-globe"></i> Target URL</label>
+                    <input type="text" id="target" placeholder="https://example.com" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label><i class="fas fa-bug"></i> Vulnerability Type</label>
+                    <select id="vulnType">
+                        <option value="all">🔍 ALL VULNERABILITIES (17 Types)</option>
+                        <option value="xss">🐛 XSS - Cross Site Scripting</option>
+                        <option value="sqli">💉 SQL Injection</option>
+                        <option value="lfi">📁 LFI / Path Traversal</option>
+                        <option value="rce">⚡ RCE - Remote Code Execution</option>
+                        <option value="ssti">🎨 SSTI - Template Injection</option>
+                        <option value="ssrf">🌐 SSRF - Server Side Request Forgery</option>
+                        <option value="xxe">📄 XXE - XML External Entity</option>
+                        <option value="open_redirect">🔄 Open Redirect</option>
+                        <option value="crlf">📝 CRLF Injection</option>
+                        <option value="nosqli">🍃 NoSQL Injection</option>
+                        <option value="idor">🔑 IDOR</option>
+                        <option value="csrf">🎭 CSRF</option>
+                        <option value="jwt">🔐 JWT Attacks</option>
+                        <option value="graphql">📊 GraphQL Injection</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-primary" id="startScan" style="flex: 2;">
+                        <i class="fas fa-play"></i> START SCAN
+                    </button>
+                    <button class="btn btn-danger" id="stopScan" style="flex: 1;">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Statistics Card -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-chart-line"></i>
+                    <span>LIVE STATISTICS</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-box-value" id="statScans">0</div>
+                        <div class="stat-box-label">Total Scans</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-value" id="statVulns">0</div>
+                        <div class="stat-box-label">Vulnerabilities</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-value" id="statTime">0</div>
+                        <div class="stat-box-label">Total Time (s)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-value" id="statCVEs">0</div>
+                        <div class="stat-box-label">CVE Matches</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Card -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>SCAN CONFIGURATION</span>
+                </div>
+                <div class="toggle-switch">
+                    <label><i class="fas fa-tools"></i> External Tools (Nmap, Nuclei)</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="useTools" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-switch">
+                    <label><i class="fas fa-brain"></i> AI Analysis (Heuristics)</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="useAI" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-switch">
+                    <label><i class="fas fa-database"></i> CVE Database Check</label>
+                    <label class="toggle">
+                        <input type="checkbox" id="checkCVE" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="input-group" style="margin-top: 15px;">
+                    <label><i class="fas fa-hourglass-half"></i> Max Scan Time</label>
+                    <input type="number" id="maxTime" value="300">
+                </div>
+            </div>
+        </div>
+
+        <div class="main">
+            <!-- Progress Section -->
+            <div class="progress-section">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="card-title" style="margin-bottom: 0;">
+                        <i class="fas fa-chart-simple"></i>
+                        <span>SCAN PROGRESS</span>
+                    </div>
+                    <div id="scanBadge" style="display: none;">
+                        <span class="badge badge-running"><i class="fas fa-sync-alt fa-spin"></i> SCANNING</span>
+                    </div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="current-task" style="display: flex; justify-content: space-between; margin-top: 12px;">
+                    <span id="currentTask"><i class="fas fa-hourglass"></i> Ready to scan</span>
+                    <span id="elapsedTime">0s</span>
+                </div>
+            </div>
+
+            <!-- Vulnerabilities Section -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-skull-crossbones"></i>
+                    <span>VULNERABILITIES FOUND</span>
+                    <span id="vulnCount" style="margin-left: auto; background: #ff4444; padding: 2px 10px; border-radius: 20px; font-size: 12px;">0</span>
+                </div>
+                <div class="vuln-list" id="vulnList">
+                    <div style="text-align: center; padding: 60px 20px; color: #6c7293;">
+                        <i class="fas fa-shield-alt" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
+                        <p>No vulnerabilities detected yet</p>
+                        <p style="font-size: 12px; margin-top: 8px;">Start a scan to discover security issues</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Section -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-terminal"></i>
+                    <span>SCAN LOG</span>
+                    <button class="btn btn-secondary" id="clearLog" style="margin-left: auto; padding: 5px 12px; font-size: 11px;">
+                        <i class="fas fa-trash"></i> CLEAR
+                    </button>
+                </div>
+                <div class="log-area" id="logArea">
+                    <div class="log-entry info">
+                        <i class="fas fa-info-circle"></i> RedHound PRO v2.0 initialized
+                    </div>
+                    <div class="log-entry info">
+                        <i class="fas fa-info-circle"></i> Ready to scan targets
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-alt"></i> Security Assessment Report</h3>
+                <button class="close-modal" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="reportContent"></div>
+            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                <button class="btn btn-primary" id="downloadReportPDF" style="flex: 1;">
+                    <i class="fas fa-file-pdf"></i> Download PDF Report
+                </button>
+                <button class="btn btn-secondary" id="downloadReportJSON" style="flex: 1;">
+                    <i class="fas fa-code"></i> Download JSON
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let scanActive = false;
+        let currentFindings = [];
+        let currentCVEs = [];
+
+        // Update stats
+        function updateStats() {
+            fetch('/api/stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('statScans').innerText = data.total_scans;
+                    document.getElementById('statVulns').innerText = data.vulnerabilities_found;
+                    document.getElementById('vulnCount').innerText = data.vulnerabilities_found;
+                    document.getElementById('statCVEs').innerText = data.cve_matches?.length || 0;
+                    currentCVEs = data.cve_matches || [];
+                });
+        }
+
+        // Update config
+        function updateConfig() {
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    max_time: parseInt(document.getElementById('maxTime').value),
+                    use_tools: document.getElementById('useTools').checked,
+                    use_ai: document.getElementById('useAI').checked,
+                    check_cve: document.getElementById('checkCVE').checked
+                })
+            });
+        }
+
+        setInterval(updateConfig, 2000);
+        setInterval(updateStats, 3000);
+        updateStats();
+
+        // Socket events
+        socket.on('connect', () => {
+            addLog('info', 'WebSocket connected successfully');
+        });
+
+        socket.on('log', (data) => {
+            let type = 'info';
+            if (data.message.includes('✅')) type = 'success';
+            else if (data.message.includes('⚠️') || data.message.includes('CVE')) type = 'warning';
+            else if (data.message.includes('❌') || data.message.includes('error')) type = 'error';
+            addLog(type, data.message);
+        });
+
+        socket.on('progress_update', (data) => {
+            document.getElementById('progressFill').style.width = data.progress + '%';
+            document.getElementById('currentTask').innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> Testing: ${data.current}`;
+            document.getElementById('elapsedTime').innerText = data.elapsed + 's';
+        });
+
+        socket.on('vulnerability_found', (data) => {
+            currentFindings.unshift(data);
+            updateVulnList();
+            updateStats();
+            addLog('error', `[!] ${data.type.toUpperCase()} found at ${data.url}`);
+        });
+
+        socket.on('scan_started', (data) => {
+            scanActive = true;
+            document.getElementById('scanBadge').style.display = 'block';
+            document.getElementById('progressFill').style.width = '0%';
+            currentFindings = [];
+            updateVulnList();
+            addLog('success', `Scan started on target: ${data.target}`);
+        });
+
+        socket.on('scan_completed', (data) => {
+            scanActive = false;
+            document.getElementById('scanBadge').style.display = 'none';
+            document.getElementById('progressFill').style.width = '100%';
+            document.getElementById('currentTask').innerHTML = `<i class="fas fa-check-circle"></i> Scan completed! Found ${data.findings?.length || 0} vulnerabilities`;
+            addLog('success', `Scan completed! Report saved: ${data.report}`);
+            if (data.cve_matches?.length) {
+                addLog('warning', `Found ${data.cve_matches.length} CVE matches`);
+            }
+        });
+
+        function addLog(type, message) {
+            const logArea = document.getElementById('logArea');
+            const icons = { info: 'fa-info-circle', success: 'fa-check-circle', error: 'fa-exclamation-triangle', warning: 'fa-exclamation-circle' };
+            logArea.innerHTML += `<div class="log-entry ${type}">
+                <i class="fas ${icons[type] || 'fa-info-circle'}"></i> [${new Date().toLocaleTimeString()}] ${message}
+            </div>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function updateVulnList() {
+            const container = document.getElementById('vulnList');
+            if (currentFindings.length === 0) {
+                container.innerHTML = `<div style="text-align: center; padding: 60px 20px; color: #6c7293;">
+                    <i class="fas fa-shield-alt" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
+                    <p>No vulnerabilities detected yet</p>
+                </div>`;
+                return;
+            }
+            container.innerHTML = currentFindings.map(f => `
+                <div class="vuln-item" onclick="showReport()">
+                    <div class="vuln-header">
+                        <span class="vuln-type"><i class="fas fa-bug"></i> ${f.type?.toUpperCase() || 'UNKNOWN'}</span>
+                        <span class="severity severity-${f.severity}">${f.severity || 'MEDIUM'}</span>
+                    </div>
+                    <div class="vuln-url"><i class="fas fa-link"></i> ${f.url || 'N/A'}</div>
+                    <div class="vuln-payload"><i class="fas fa-code"></i> ${escapeHtml(f.payload || 'N/A').substring(0, 100)}</div>
+                    ${f.ai_confidence ? `<div style="font-size: 10px; margin-top: 8px; color: #ffaa44;"><i class="fas fa-brain"></i> AI Confidence: ${f.ai_confidence}% (${f.ai_verdict})</div>` : ''}
+                    ${f.cve_matches?.length ? `<div style="font-size: 10px; margin-top: 8px; color: #ff4444;"><i class="fas fa-shield-virus"></i> ${f.cve_matches.length} CVE(s) found</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
+        function showReport() {
+            const modal = document.getElementById('reportModal');
+            const reportContent = document.getElementById('reportContent');
+            
+            const reportHTML = generateReportHTML();
+            reportContent.innerHTML = reportHTML;
+            modal.style.display = 'flex';
+        }
+
+        function generateReportHTML() {
+            const critical = currentFindings.filter(f => f.severity === 'Critical').length;
+            const high = currentFindings.filter(f => f.severity === 'High').length;
+            const medium = currentFindings.filter(f => f.severity === 'Medium').length;
+            const low = currentFindings.filter(f => f.severity === 'Low').length;
+
+            return `
+                <div style="font-family: 'Inter', monospace;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <div style="background: linear-gradient(135deg, #ff4444, #cc0000); width: 60px; height: 60px; border-radius: 15px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+                            <i class="fas fa-shield-hog" style="font-size: 32px;"></i>
+                        </div>
+                        <h2 style="color: #ff4444;">RedHound PRO Security Assessment</h2>
+                        <p style="color: #8b8fad;">Generated on ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <div class="report-stats">
+                        <div class="stat-box"><div class="stat-box-value">${currentFindings.length}</div><div class="stat-box-label">Total Vulns</div></div>
+                        <div class="stat-box"><div class="stat-box-value" style="color: #ff4444;">${critical}</div><div class="stat-box-label">Critical</div></div>
+                        <div class="stat-box"><div class="stat-box-value" style="color: #ff8844;">${high}</div><div class="stat-box-label">High</div></div>
+                        <div class="stat-box"><div class="stat-box-value" style="color: #ffaa44;">${medium}</div><div class="stat-box-label">Medium</div></div>
+                    </div>
+                    
+                    <h3 style="color: #ff4444; margin: 20px 0 15px;"><i class="fas fa-list"></i> Detailed Findings</h3>
+                    ${currentFindings.map((f, i) => `
+                        <div style="background: #0a0c12; border-left: 3px solid #ff4444; padding: 15px; margin-bottom: 12px; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <strong style="color: #ff4444;">${f.type?.toUpperCase()}</strong>
+                                <span style="background: ${f.severity === 'Critical' ? '#ff4444' : f.severity === 'High' ? '#ff8844' : '#ffaa44'}; padding: 2px 8px; border-radius: 12px; font-size: 11px;">${f.severity}</span>
+                            </div>
+                            <div style="font-size: 12px; color: #8b8fad; margin-bottom: 8px;"><i class="fas fa-link"></i> ${f.url}</div>
+                            <div style="background: #000; padding: 8px; border-radius: 6px; font-family: monospace; font-size: 11px; word-break: break-all;">
+                                <i class="fas fa-code"></i> Payload: ${escapeHtml(f.payload || 'N/A')}
+                            </div>
+                            ${f.ai_confidence ? `<div style="margin-top: 8px; font-size: 11px;"><i class="fas fa-brain"></i> AI Analysis: ${f.ai_confidence}% confidence (${f.ai_verdict})</div>` : ''}
+                        </div>
+                    `).join('')}
+                    
+                    ${currentCVEs.length ? `
+                        <h3 style="color: #ff4444; margin: 20px 0 15px;"><i class="fas fa-shield-virus"></i> CVE Matches</h3>
+                        ${currentCVEs.map(cve => `
+                            <div style="background: #0a0c12; padding: 12px; margin-bottom: 10px; border-radius: 8px;">
+                                <strong style="color: #ffaa44;">${cve.id}</strong>
+                                <p style="font-size: 12px; margin-top: 5px;">${cve.description}</p>
+                                <span style="font-size: 11px; color: #ff4444;">CVSS Score: ${cve.cvss_score || 'N/A'}</span>
+                            </div>
+                        `).join('')}
+                    ` : ''}
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,68,68,0.2); text-align: center; font-size: 11px; color: #6c7293;">
+                        <i class="fas fa-shield-alt"></i> RedHound PRO - Advanced Bug Bounty Framework
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeModal() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+
+        // Export functions
+        document.getElementById('exportPDFBtn').onclick = () => showReport();
+        document.getElementById('downloadReportPDF').onclick = () => {
+            const element = document.getElementById('reportContent');
+            html2pdf().from(element).set({
+                margin: 1,
+                filename: `redhound_report_${new Date().toISOString().slice(0,19)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, letterRendering: true },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            }).save();
+        };
+
+        document.getElementById('exportJSONBtn').onclick = () => {
+            const report = {
+                timestamp: new Date().toISOString(),
+                total_vulnerabilities: currentFindings.length,
+                vulnerabilities: currentFindings,
+                cve_matches: currentCVEs,
+                summary: {
+                    critical: currentFindings.filter(f => f.severity === 'Critical').length,
+                    high: currentFindings.filter(f => f.severity === 'High').length,
+                    medium: currentFindings.filter(f => f.severity === 'Medium').length,
+                    low: currentFindings.filter(f => f.severity === 'Low').length
+                }
+            };
+            const dataStr = JSON.stringify(report, null, 2);
+            const blob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `redhound_report_${new Date().toISOString().slice(0,19)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        document.getElementById('downloadReportJSON').onclick = () => {
+            document.getElementById('exportJSONBtn').click();
+        };
+
+        document.getElementById('startScan').onclick = () => {
+            const target = document.getElementById('target').value;
+            if (!target) {
+                addLog('error', 'Please enter a target URL');
+                return;
+            }
+            const vulnType = document.getElementById('vulnType').value;
+            fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url: target, types: vulnType === 'all' ? [] : [vulnType]})
+            });
+        };
+
+        document.getElementById('stopScan').onclick = () => {
+            fetch('/api/stop', {method: 'POST'});
+            addLog('warning', 'Scan stop requested');
+        };
+
+        document.getElementById('clearLog').onclick = () => {
+            document.getElementById('logArea').innerHTML = `
+                <div class="log-entry info"><i class="fas fa-info-circle"></i> Log cleared</div>
+            `;
+        };
+    </script>
+</body>
+</html>

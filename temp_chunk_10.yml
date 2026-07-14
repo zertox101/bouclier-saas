@@ -1,0 +1,10 @@
+services:
+  # Ã¢â€â‚¬Ã¢â€â‚¬ SECURITY GATEWAY (Nginx WAF/Reverse Proxy) Ã¢â€â‚¬Ã¢â€â‚¬
+  gateway:
+    build:
+      context: ./infra/gateway
+      dockerfile: Dockerfile
+    container_name: shield-gateway
+    restart: always
+    ports:
+      - "8081:80"

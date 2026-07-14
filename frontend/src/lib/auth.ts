@@ -11,26 +11,23 @@ export type AuthResponse = {
   user: AuthUser;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8005";
+import { apiClient } from "./api-client";
 
 async function requestAuth(
   path: string,
   body: Record<string, string>
 ): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  try {
+    const data = await apiClient<AuthResponse>(path, {
+      method: "POST",
+      json: body,
+    });
+    return data;
+  } catch (err: any) {
     const message =
-      typeof data.detail === "string" ? data.detail : "Authentication failed";
+      typeof err?.data?.detail === "string" ? err.data.detail : "Authentication failed";
     throw new Error(message);
   }
-
-  return data as AuthResponse;
 }
 
 export function loginUser(email: string, password: string): Promise<AuthResponse> {
