@@ -113,3 +113,39 @@ Thumbs.db
 *.gz
 *.zip
 *.bak
+
+# JSON data/test artifacts
+login.json
+mini_test.json
+ollama_test.json
+test.json
+test_payload.json
+test_report.json
+response.json
+raptor_fuzz.json
+raptor_help.json
+raptor_scan.json
+raptor_web.json
+REAL_AI_REPORT.json
+NEXUS_BOUCLIER_AI-SOC.pptx
+world.json
+
+# Local AI models & data
+ollama_data/
+ml/models/
+infra/ollama_data/
+
+# RAPTOR cache
+raptor-main/core/dataflow/corpus/findings/
+raptor-main/core/sage/mcp-entry.json
+raptor-main/engine/semgrep/rules/registry-cache/
+raptor-main/packages/**/fixtures/
+raptor-main/packages/sca/test-durations.json
+tools/knowledge_base/
+
+# Mini agent
+backend/app/services/mini_agent/config/mcp-example.json
+backend/app/services/mini_agent/skills/.claude-plugin/
+
+# Dev
+.devcontainer/
