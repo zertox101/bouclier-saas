@@ -91,10 +91,9 @@ export function HeroSlider() {
                     {/* Background Image Placeholder or Real Image */}
                     <div
                         className="absolute inset-0 bg-cover bg-center transition-transform ease-linear scale-110"
-                        style={{ transitionDuration: '10000ms' }}
                         style={{
+                            transitionDuration: '10000ms',
                             backgroundImage: `linear-gradient(to bottom, rgba(2, 6, 23, 0.4), rgba(2, 6, 23, 1)), url(${slides[current].image})`,
-                            // Fallback color if image missing
                             backgroundColor: '#020617'
                         }}
                     />
