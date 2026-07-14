@@ -22,7 +22,7 @@ geoip2
 reportlab
 fpdf2
 mcp>=1.2.0
-httpx-sse>=0.4.0
+httpx-sse>=0.4.3
 qdrant-client
 celery
 numpy<2.0.0
