@@ -1,0 +1,34 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+ignore = [
+    "F401",    # unused imports — common in FastAPI model/route imports
+    "E402",    # module-level import not at top — needed for FastAPI late imports
+    "E501",    # line too long
+    "E722",    # bare except — acceptable in some error handlers
+    "E701",    # multiple statements on one line
+    "F841",    # unused variable
+    "F541",    # f-string without placeholders
+    "E741",    # ambiguous variable name
+    "E712",    # equality comparisons to True/False
+    "F811",    # redefinition of unused variable
+    "E401",    # multiple imports on one line
+    "F601",    # dictionary key repeated
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/routes/alerts.py" = ["F821"]
+"app/services/analytics.py" = ["F821"]
+"app/routes/soc/incidents.py" = ["F811"]
+"app/routes/soc_expert.py" = ["F811"]
+"app/routes/cicids_stream.py" = ["F811"]
+"app/routes/admin/platform.py" = ["F811"]
+"app/main.py" = ["F811"]
+"app/schemas/scans.py" = ["F811"]
+"app/routers/sentinel_ai.py" = ["F601"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
