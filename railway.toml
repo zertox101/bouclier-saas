@@ -1,0 +1,34 @@
+# Bouclier SaaS — Railway Deployment Config
+# See https://docs.railway.app/reference/railway-toml
+
+[deploy]
+strategy = "docker-compose"
+healthcheck-path = "/health"
+healthcheck-timeout = 60
+
+[build]
+# Use root docker-compose.yml
+
+[service.backend]
+name = "backend"
+root-directory = "."
+docker-compose-service = "backend"
+port = 8005
+
+[service.frontend]
+name = "frontend"
+root-directory = "."
+docker-compose-service = "frontend"
+port = 8080
+
+[service.gateway]
+name = "gateway"
+root-directory = "."
+docker-compose-service = "gateway"
+port = 80
+
+[service.tools-api]
+name = "tools-api"
+root-directory = "."
+docker-compose-service = "tools-api"
+port = 8100
