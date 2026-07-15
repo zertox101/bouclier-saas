@@ -255,13 +255,13 @@
   #     - core-net
   #     - ai-net
   #   deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 6GB
-    depends_on:
-      ollama:
-        condition: service_healthy
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 6GB
+  #   depends_on:
+  #     ollama:
+  #       condition: service_healthy
 
   # Threat Intelligence Feed (feeds real-time data to ThreatMap2D / map/stream SSE)
   threat-injector:
