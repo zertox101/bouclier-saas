@@ -149,3 +149,5 @@ backend/app/services/mini_agent/skills/.claude-plugin/
 
 # Dev
 .devcontainer/
+
+services/raptor/raptor-main/

@@ -230,31 +230,31 @@
     networks:
       - bouclier-net
 
-  # RAPTOR (Autonomous Security Research Framework)
-  raptor:
-    build:
-      context: ./services/raptor
-      dockerfile: Dockerfile
-    container_name: bouclier-raptor
-    restart: always
-    privileged: true
-    cap_add:
-      - SYS_PTRACE
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      - PYTHONUNBUFFERED=1
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-    volumes:
-      - ./raptor-data:/app/out:rw
-      - ./raptor-logs:/app/logs:rw
-      - ./infra/logs:/app/infra-logs:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - core-net
-      - ai-net
-    deploy:
+  # RAPTOR (disabled — needs submodule restoration)
+  # raptor:
+  #   build:
+  #     context: ./services/raptor
+  #     dockerfile: Dockerfile
+  #   container_name: bouclier-raptor
+  #   restart: always
+  #   privileged: true
+  #   cap_add:
+  #     - SYS_PTRACE
+  #   security_opt:
+  #     - seccomp:unconfined
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+  #   volumes:
+  #     - ./raptor-data:/app/out:rw
+  #     - ./raptor-logs:/app/logs:rw
+  #     - ./infra/logs:/app/infra-logs:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   networks:
+  #     - core-net
+  #     - ai-net
+  #   deploy:
       resources:
         limits:
           cpus: '2.0'
